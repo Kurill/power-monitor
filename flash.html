@@ -6,303 +6,573 @@
     <title>Прошивка ESP32 — Power Monitor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
-    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2.5.0/dist/serial-launch-button.js?module"></script>
+
     <style>
         :root {
-            --bg-deep: #06060a;
-            --bg-card: #0d0d14;
-            --bg-elevated: #13131c;
-            --bg-input: #0a0a0f;
+            --bg-void: #030305;
+            --bg-surface: #0a0a0f;
+            --bg-elevated: #111118;
+            --bg-input: #08080c;
             --electric: #fbbf24;
-            --electric-glow: rgba(251, 191, 36, 0.15);
-            --online: #22c55e;
-            --online-glow: rgba(34, 197, 94, 0.15);
-            --text: #f4f4f5;
-            --text-muted: #71717a;
-            --text-dim: #3f3f46;
-            --border: rgba(255,255,255,0.08);
+            --electric-dim: #b8860b;
+            --electric-glow: rgba(251, 191, 36, 0.25);
+            --electric-subtle: rgba(251, 191, 36, 0.08);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.25);
+            --danger: #ef4444;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-tertiary: #52525b;
+            --border: rgba(251, 191, 36, 0.12);
+            --border-subtle: rgba(255,255,255,0.06);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html {
+            background: var(--bg-void);
+        }
+
         body {
-            font-family: 'Onest', system-ui, sans-serif;
-            background: var(--bg-deep);
-            color: var(--text);
+            font-family: 'Outfit', system-ui, sans-serif;
+            background: var(--bg-void);
+            color: var(--text-primary);
             min-height: 100vh;
-            line-height: 1.6;
+            line-height: 1.5;
+            overflow-x: hidden;
         }
 
-        body::before {
-            content: '';
+        /* Circuit board pattern background */
+        .circuit-bg {
             position: fixed;
             inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            opacity: 0.03;
+            opacity: 0.4;
             pointer-events: none;
+            background:
+                linear-gradient(90deg, transparent 49.5%, var(--electric-subtle) 49.5%, var(--electric-subtle) 50.5%, transparent 50.5%),
+                linear-gradient(0deg, transparent 49.5%, var(--electric-subtle) 49.5%, var(--electric-subtle) 50.5%, transparent 50.5%);
+            background-size: 60px 60px;
+            mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 0%, transparent 70%);
+        }
+
+        /* Animated glow orb */
+        .glow-orb {
+            position: fixed;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(ellipse, var(--electric-glow) 0%, transparent 70%);
+            pointer-events: none;
+            animation: orb-pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes orb-pulse {
+            0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+            50% { opacity: 0.9; transform: translateX(-50%) scale(1.1); }
+        }
+
+        /* Scanline effect */
+        .scanlines {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 2px,
+                rgba(0,0,0,0.1) 2px,
+                rgba(0,0,0,0.1) 4px
+            );
             z-index: 1000;
-        }
-
-        .grid-bg {
-            position: fixed;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(251,191,36,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(251,191,36,0.02) 1px, transparent 1px);
-            background-size: 50px 50px;
-            pointer-events: none;
+            opacity: 0.3;
         }
 
         .container {
             max-width: 480px;
             margin: 0 auto;
-            padding: 32px 20px 60px;
+            padding: 48px 24px 80px;
             position: relative;
             z-index: 1;
         }
 
+        /* Header */
         .header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 48px;
         }
 
         .logo {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             text-decoration: none;
-            color: var(--text);
-            margin-bottom: 24px;
+            color: var(--text-primary);
+            margin-bottom: 32px;
+            transition: transform 0.2s;
+        }
+
+        .logo:hover {
+            transform: scale(1.02);
         }
 
         .logo-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--electric);
-            border-radius: 12px;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, var(--electric) 0%, var(--electric-dim) 100%);
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
-            box-shadow: 0 0 30px var(--electric-glow);
+            font-size: 28px;
+            box-shadow:
+                0 0 40px var(--electric-glow),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+            position: relative;
+        }
+
+        .logo-icon::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 16px;
+            border: 1px solid var(--electric);
+            opacity: 0.3;
         }
 
         .logo-text {
-            font-family: 'Unbounded', sans-serif;
-            font-weight: 800;
-            font-size: 20px;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: -0.5px;
         }
 
         .page-title {
-            font-family: 'Unbounded', sans-serif;
-            font-size: 28px;
-            font-weight: 800;
-            margin-bottom: 8px;
+            font-family: 'Space Mono', monospace;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .page-subtitle {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             font-size: 15px;
+            font-weight: 400;
+        }
+
+        /* Browser warning */
+        .browser-warning {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 32px;
+            text-align: center;
+            font-size: 14px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .browser-warning.visible {
+            display: block;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
 
         /* Steps */
         .step {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 16px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .step::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--electric), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .step:hover::before,
+        .step.active::before {
+            opacity: 0.5;
+        }
+
+        .step.completed {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .step.completed::before {
+            background: linear-gradient(90deg, transparent, var(--success), transparent);
+            opacity: 0.5;
         }
 
         .step-header {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 16px;
             margin-bottom: 16px;
         }
 
         .step-number {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--electric);
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--bg-elevated);
+            border: 2px solid var(--electric);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'Unbounded', sans-serif;
-            font-weight: 800;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
             font-size: 14px;
-            color: var(--bg-deep);
+            color: var(--electric);
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .step-number.done {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+            box-shadow: 0 0 20px var(--success-glow);
         }
 
         .step-title {
-            font-family: 'Unbounded', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
+            font-family: 'Space Mono', monospace;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
         }
 
         .step-desc {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             font-size: 14px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            line-height: 1.6;
         }
 
-        /* Form */
-        .form-group {
-            margin-bottom: 16px;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
+        /* Input */
+        .input-wrapper {
+            position: relative;
         }
 
         .form-input {
             width: 100%;
-            padding: 14px 16px;
+            padding: 16px 20px;
             background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 15px;
-            font-family: inherit;
+            border: 2px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 500;
+            transition: all 0.2s;
         }
 
         .form-input:focus {
             outline: none;
             border-color: var(--electric);
-            box-shadow: 0 0 0 3px var(--electric-glow);
+            box-shadow: 0 0 0 4px var(--electric-subtle);
+            background: var(--bg-surface);
         }
 
         .form-input::placeholder {
-            color: var(--text-dim);
+            color: var(--text-tertiary);
+            font-weight: 400;
         }
 
-        /* Flash button */
-        .flash-section {
-            text-align: center;
-            padding: 32px 0;
-        }
-
-        .btn-flash {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+        /* Buttons */
+        .btn {
             width: 100%;
-            padding: 18px 32px;
-            background: var(--online);
+            padding: 18px 28px;
             border: none;
-            border-radius: 12px;
-            color: white;
-            font-size: 17px;
+            border-radius: 14px;
+            font-size: 15px;
             font-weight: 600;
-            font-family: inherit;
+            font-family: 'Outfit', sans-serif;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .btn-flash:hover {
-            filter: brightness(1.1);
+        .btn-primary {
+            background: linear-gradient(135deg, var(--electric) 0%, var(--electric-dim) 100%);
+            color: var(--bg-void);
+            box-shadow: 0 4px 20px var(--electric-glow);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary:hover:not(:disabled)::before {
+            opacity: 1;
+        }
+
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
+            box-shadow: 0 8px 40px var(--electric-glow);
         }
 
-        .btn-flash:disabled {
-            background: var(--bg-elevated);
-            color: var(--text-dim);
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.4;
             cursor: not-allowed;
-            transform: none;
+            box-shadow: none;
         }
 
-        esp-web-install-button {
+        .btn.flashing {
+            animation: btn-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes btn-pulse {
+            0%, 100% { box-shadow: 0 4px 20px var(--electric-glow); }
+            50% { box-shadow: 0 4px 40px var(--electric-glow), 0 0 60px var(--electric-glow); }
+        }
+
+        .btn-icon {
+            font-size: 18px;
+        }
+
+        /* Progress */
+        .progress-container {
+            margin-top: 24px;
+            display: none;
+        }
+
+        .progress-container.visible {
             display: block;
+            animation: fade-in 0.3s ease;
         }
 
-        /* Info box */
-        .info-box {
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .progress-bar {
+            height: 6px;
             background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--electric), var(--success));
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+            animation: progress-shine 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progress-shine {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(400px); }
+        }
+
+        .progress-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Log */
+        .flash-log {
+            margin-top: 20px;
             padding: 16px;
-            margin-top: 16px;
+            background: var(--bg-void);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            max-height: 180px;
+            overflow-y: auto;
+            display: none;
+            line-height: 1.7;
         }
-        .info-box.success { border-color: rgba(34,197,94,0.5); }
-        .info-box.error { border-color: rgba(239,68,68,0.5); }
 
-        .info-title {
+        .flash-log.visible {
+            display: block;
+            animation: fade-in 0.3s ease;
+        }
+
+        .flash-log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .flash-log::-webkit-scrollbar-track {
+            background: var(--bg-surface);
+            border-radius: 3px;
+        }
+
+        .flash-log::-webkit-scrollbar-thumb {
+            background: var(--text-tertiary);
+            border-radius: 3px;
+        }
+
+        .flash-log div {
+            color: var(--text-secondary);
+        }
+
+        .flash-log .error { color: var(--danger); }
+        .flash-log .success { color: var(--success); }
+
+        /* WiFi Section */
+        .wifi-section {
+            margin-top: 4px;
+        }
+
+        improv-wifi-serial-launch-button {
+            --improv-primary-color: var(--success);
+            --improv-on-primary-color: white;
+        }
+
+        .wifi-btn {
+            width: 100%;
+            padding: 18px 28px;
+            border: none;
+            border-radius: 14px;
+            font-size: 15px;
             font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 8px;
+            font-family: 'Outfit', sans-serif;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+            color: white;
             display: flex;
             align-items: center;
-            gap: 8px;
-        }
-
-        .info-text {
-            font-size: 13px;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        .info-text strong {
-            color: var(--electric);
-        }
-
-        /* Feature list */
-        .feature-list {
-            display: flex;
-            flex-direction: column;
+            justify-content: center;
             gap: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 20px var(--success-glow);
+        }
+
+        .wifi-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px var(--success-glow);
+        }
+
+        .wifi-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .wifi-status {
             margin-top: 16px;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            background: var(--bg-elevated);
+            padding: 14px 18px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
             border-radius: 10px;
             font-size: 14px;
+            display: none;
+            color: var(--success);
         }
 
-        .feature-icon {
-            font-size: 20px;
+        .wifi-status.visible {
+            display: block;
+            animation: fade-in 0.3s ease;
         }
 
         /* Footer */
         .footer {
             text-align: center;
-            margin-top: 32px;
+            margin-top: 40px;
         }
 
         .footer-link {
-            color: var(--text-dim);
+            color: var(--text-tertiary);
             text-decoration: none;
             font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .footer-link:hover {
             color: var(--electric);
         }
 
-        @media (max-width: 500px) {
-            .container {
-                padding: 24px 16px 48px;
-            }
+        /* Connection line between steps */
+        .step-connector {
+            width: 2px;
+            height: 20px;
+            background: var(--border-subtle);
+            margin: 0 auto;
+            position: relative;
+        }
 
-            .page-title {
-                font-size: 24px;
-            }
+        .step-connector::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--bg-surface);
+            border: 2px solid var(--border-subtle);
+            border-radius: 50%;
         }
     </style>
 </head>
 <body>
-    <div class="grid-bg"></div>
+    <div class="circuit-bg"></div>
+    <div class="glow-orb"></div>
+    <div class="scanlines"></div>
 
     <div class="container">
         <div class="header">
@@ -311,124 +581,118 @@
                 <span class="logo-text">Power Monitor</span>
             </a>
             <h1 class="page-title">Прошивка ESP32</h1>
-            <p class="page-subtitle">Автоматичне налаштування WiFi</p>
+            <p class="page-subtitle">Встанови прошивку та налаштуй WiFi</p>
         </div>
 
-        <!-- Step 1: Name device -->
-        <div class="step">
+        <div class="browser-warning" id="browserWarning">
+            ⚠️ Цей браузер не підтримує Web Serial. Використай <strong>Chrome</strong> або <strong>Edge</strong> на комп'ютері.
+        </div>
+
+        <!-- Step 1: Device Name -->
+        <div class="step" id="step1">
             <div class="step-header">
-                <div class="step-number">1</div>
-                <div class="step-title">Назви пристрій</div>
+                <div class="step-number" id="step1num">1</div>
+                <div class="step-title">Назва пристрою</div>
             </div>
-            <div class="form-group">
-                <input type="text" class="form-input" id="deviceName"
-                       placeholder="Наприклад: Квартира на Хрещатику"
-                       maxlength="40" oninput="updateFlashButton()">
+            <div class="step-desc">Введи назву для ідентифікації — наприклад, «Квартира» або «Дача»</div>
+            <div class="input-wrapper">
+                <input type="text" class="form-input" id="deviceName" placeholder="Введи назву пристрою" maxlength="40" autocomplete="off" spellcheck="false">
             </div>
         </div>
+
+        <div class="step-connector"></div>
 
         <!-- Step 2: Flash -->
-        <div class="step">
+        <div class="step" id="step2">
             <div class="step-header">
-                <div class="step-number">2</div>
+                <div class="step-number" id="step2num">2</div>
                 <div class="step-title">Прошивка</div>
             </div>
-            <p class="step-desc">
-                Підключи ESP32 до USB і натисни кнопку. Після успішної прошивки переходь до кроку 3, щоб налаштувати WiFi.
-            </p>
+            <div class="step-desc">Підключи ESP32 до USB та натисни кнопку прошивки</div>
 
-            <esp-web-install-button id="flashBtn">
-                <button slot="activate" class="btn-flash" id="flashBtnInner" disabled>
-                    ⚡ Прошити ESP32
-                </button>
-                <span slot="unsupported">Потрібен Chrome або Edge</span>
-                <span slot="not-allowed">Натисни ще раз</span>
-            </esp-web-install-button>
+            <button class="btn btn-primary" id="flashBtn" disabled>
+                <span class="btn-icon">⚡</span>
+                <span id="flashBtnText">Прошити ESP32</span>
+            </button>
 
-            <div class="info-box">
-                <div class="info-title">💡 Як це працює</div>
-                <div class="info-text">
-                    Після прошивки пристрій перезавантажиться з новою ОС. На кроці 3 він попросить
-                    дані WiFi через Improv — сторінка відкриє вікно налаштування.
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
                 </div>
+                <div class="progress-text" id="progressText">Підготовка...</div>
             </div>
+
+            <div class="flash-log" id="flashLog"></div>
         </div>
+
+        <div class="step-connector"></div>
 
         <!-- Step 3: WiFi -->
-        <div class="step">
+        <div class="step" id="step3">
             <div class="step-header">
-                <div class="step-number">3</div>
-                <div class="step-title">Підключення до WiFi</div>
+                <div class="step-number" id="step3num">3</div>
+                <div class="step-title">Налаштування WiFi</div>
             </div>
-            <p class="step-desc">
-                Після прошивки натисни кнопку нижче. Зʼявиться Improv-майстер: обери мережу та введи пароль.
-            </p>
-            <improv-wifi-serial-launch-button id="wifiLauncher">
-                <button slot="activate" class="btn-flash btn-wifi" id="wifiBtnInner" disabled>
-                    📡 Налаштувати WiFi
-                </button>
-                <span slot="unsupported">Потрібен Chrome або Edge</span>
-            </improv-wifi-serial-launch-button>
-            <div class="info-box" id="wifiStatusBox" hidden>
-                <div class="info-title">📡 Статус WiFi</div>
-                <div class="info-text" id="wifiStatusText"></div>
-            </div>
-        </div>
+            <div class="step-desc">Після прошивки налаштуй WiFi мережу для пристрою</div>
 
-        <!-- Features -->
-        <div class="feature-list">
-            <div class="feature-item">
-                <span class="feature-icon">📶</span>
-                <span>Автоматичний скан WiFi мереж</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-icon">✅</span>
-                <span>Перевірка підключення в реальному часі</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-icon">🔄</span>
-                <span>Можна змінити WiFi пізніше</span>
-            </div>
-        </div>
+            <div class="wifi-section">
+                <improv-wifi-serial-launch-button id="wifiLauncher">
+                    <button class="wifi-btn" id="wifiBtnInner" slot="activate" disabled>
+                        <span>📶</span>
+                        <span>Налаштувати WiFi</span>
+                    </button>
+                </improv-wifi-serial-launch-button>
 
-        <div class="info-box" style="margin-top: 24px;">
-            <div class="info-title">⚠️ Якщо не прошивається</div>
-            <div class="info-text">
-                Утримуй кнопку <strong>BOOT</strong> на платі, натискаючи «Прошити ESP32». Відпусти BOOT, коли процес почнеться.
+                <div class="wifi-status" id="wifiStatus"></div>
             </div>
         </div>
 
         <div class="footer">
-            <a href="/" class="footer-link">← На головну</a>
+            <a href="/" class="footer-link">
+                <span>←</span>
+                <span>На головну</span>
+            </a>
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        // Use local esptool-js bundle with flushInput fix
+        import { ESPLoader, Transport } from '/esptool-bundle.js';
+
         const SERVER = 'https://power-monitor.club';
         let currentDeviceId = '';
         let cachedOwnerEmail = null;
+        let flashSuccess = false;
 
-        // Check login once on load
+        // State for flashing
+        let device = null;
+        let transport = null;
+        let esploader = null;
+
+        // Elements
+        const deviceNameInput = document.getElementById('deviceName');
+        const flashBtn = document.getElementById('flashBtn');
+        const flashBtnText = document.getElementById('flashBtnText');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const flashLog = document.getElementById('flashLog');
+        const wifiLauncher = document.getElementById('wifiLauncher');
+        const wifiBtnInner = document.getElementById('wifiBtnInner');
+        const wifiStatus = document.getElementById('wifiStatus');
+        const browserWarning = document.getElementById('browserWarning');
+
+        // Check browser support
+        if (!navigator.serial) {
+            browserWarning.classList.add('visible');
+        }
+
+        // Get owner email (cached)
         fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
             cachedOwnerEmail = data?.email || null;
         }).catch(() => {});
 
-        const wifiLauncher = document.getElementById('wifiLauncher');
-        const wifiBtnInner = document.getElementById('wifiBtnInner');
-        const wifiStatusBox = document.getElementById('wifiStatusBox');
-        const wifiStatusText = document.getElementById('wifiStatusText');
-
-        wifiBtnInner.addEventListener('click', (event) => {
-            if (wifiBtnInner.disabled) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-        });
-
-        wifiLauncher.addEventListener('closed', (event) => {
-            handleWifiResult(event.detail || {});
-        });
-
+        // Generate device ID from name
         function generateId(name) {
             const slug = name.toLowerCase()
                 .replace(/[а-яіїєґ]/g, c => {
@@ -438,106 +702,212 @@
                 .replace(/[^a-z0-9]+/g, '_')
                 .replace(/^_|_$/g, '')
                 .substring(0, 20);
-            const hash = Math.random().toString(36).substring(2, 6);
-            return slug + '_' + hash;
+            return slug + '_' + Math.random().toString(36).substring(2, 6);
         }
 
-        function updateFlashButton() {
-            const name = document.getElementById('deviceName').value.trim();
-            const btn = document.getElementById('flashBtnInner');
-            const flashBtn = document.getElementById('flashBtn');
-            const wifiBtn = document.getElementById('wifiBtnInner');
+        // Logging
+        function log(msg, type = '') {
+            flashLog.classList.add('visible');
+            const line = document.createElement('div');
+            if (type) line.className = type;
+            line.textContent = msg;
+            flashLog.appendChild(line);
+            flashLog.scrollTop = flashLog.scrollHeight;
+        }
 
+        function setProgress(pct, text) {
+            progressContainer.classList.add('visible');
+            progressFill.style.width = pct + '%';
+            progressText.textContent = text;
+        }
+
+        // Terminal for esptool
+        const espLoaderTerminal = {
+            clean() { flashLog.innerHTML = ''; },
+            writeLine(data) { log(data); },
+            write(data) { log(data); }
+        };
+
+        // Cleanup
+        function cleanUp() {
+            device = null;
+            transport = null;
+            esploader = null;
+        }
+
+        // UI update
+        function updateUI() {
+            const name = deviceNameInput.value.trim();
             if (name.length >= 3) {
-                btn.disabled = false;
+                flashBtn.disabled = false;
                 currentDeviceId = generateId(name);
-                wifiBtn.disabled = false;
+                document.getElementById('step1').classList.add('active');
+            } else {
+                flashBtn.disabled = true;
+                currentDeviceId = '';
+                document.getElementById('step1').classList.remove('active');
+            }
 
-                const params = new URLSearchParams({
-                    device: currentDeviceId,
-                    name: name,
-                    server: '178.62.112.232',
-                    improv: 'true'
+            // Enable WiFi button only after successful flash
+            wifiBtnInner.disabled = !flashSuccess;
+        }
+
+        // Bind input event
+        deviceNameInput.addEventListener('input', updateUI);
+
+        // Flash button click - direct flashing
+        flashBtn.onclick = async () => {
+            const name = deviceNameInput.value.trim();
+            if (name.length < 3) return;
+
+            if (!navigator.serial) {
+                alert("Браузер не підтримує Web Serial. Використай Chrome або Edge.");
+                return;
+            }
+
+            flashBtn.disabled = true;
+            flashBtnText.textContent = "Підключення...";
+            flashBtn.classList.add('flashing');
+            document.getElementById('step2').classList.add('active');
+
+            try {
+                // 1. Request port
+                log("Вибери COM порт...");
+                device = await navigator.serial.requestPort({});
+                const deviceInfo = device.getInfo();
+                log("Port: VID=0x" + deviceInfo.usbVendorId?.toString(16) + " PID=0x" + deviceInfo.usbProductId?.toString(16));
+
+                // 2. Create transport
+                log("Створення transport...");
+                transport = new Transport(device, true);
+
+                // 3. Create loader
+                log("Створення ESPLoader...");
+                esploader = new ESPLoader({
+                    transport,
+                    baudrate: 460800,
+                    terminal: espLoaderTerminal,
+                    debugLogging: false
                 });
 
-                if (cachedOwnerEmail) params.set('owner', cachedOwnerEmail);
-                flashBtn.setAttribute('manifest', SERVER + '/api/manifest?' + params.toString());
-                setWifiStatus('', { hidden: true });
-            } else {
-                btn.disabled = true;
-                currentDeviceId = '';
-                wifiBtn.disabled = true;
-                setWifiStatus('', { hidden: true });
-            }
-        }
+                // 4. Connect to chip
+                setProgress(5, "Підключення до ESP32...");
+                log("Підключення до чіпа...");
+                const chip = await esploader.main();
+                log("Підключено: " + chip, "success");
 
-        function setWifiStatus(message, options = {}) {
-            const { hidden = false, tone } = options;
-            wifiStatusBox.classList.remove('success', 'error');
-            if (hidden || !message) {
-                wifiStatusBox.hidden = true;
-                wifiStatusText.textContent = '';
-                return;
-            }
-            wifiStatusBox.hidden = false;
-            if (tone === 'success') wifiStatusBox.classList.add('success');
-            if (tone === 'error') wifiStatusBox.classList.add('error');
-            wifiStatusText.textContent = message;
-        }
+                // 5. Download firmware
+                setProgress(15, "Завантаження прошивки...");
+                flashBtnText.textContent = "Завантаження...";
+                log("Завантаження прошивки...");
 
-        async function handleWifiResult(detail) {
-            if (!detail?.improv) {
-                setWifiStatus('Пристрій не відповів через Improv. Переконайся, що він прошитий цією сторінкою.', { tone: 'error' });
-                return;
-            }
-            if (!detail.provisioned) {
-                setWifiStatus('Налаштування WiFi скасовано. Спробуй ще раз.', { tone: 'error' });
-                return;
-            }
+                const fwUrl = `${SERVER}/api/firmware?device=${currentDeviceId}&name=${encodeURIComponent(name)}&server=178.62.112.232&improv=true`;
+                const resp = await fetch(fwUrl);
+                if (!resp.ok) throw new Error("Помилка завантаження: " + resp.status);
 
-            let claimed = false;
-            if (currentDeviceId) {
-                claimed = await claimDevice(currentDeviceId);
-            }
+                const fwData = new Uint8Array(await resp.arrayBuffer());
+                log("Завантажено " + fwData.length + " байт", "success");
 
-            const successMessage = claimed
-                ? 'WiFi збережено, пристрій додано до акаунта. Відкриваю дашборд…'
-                : 'WiFi збережено. Перевір пристрій у дашборді.';
-
-            setWifiStatus(successMessage, { tone: 'success' });
-
-            if (claimed) {
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 2000);
-            }
-        }
-
-        async function claimDevice(deviceId) {
-            try {
-                const res = await fetch('/api/claim?device=' + encodeURIComponent(deviceId));
-                return res.ok;
-            } catch (err) {
-                console.error('Claim failed:', err);
-                return false;
-            }
-        }
-
-        // Setup flash button with state handling
-        function setupFlashButton() {
-            const btn = document.getElementById('flashBtn');
-            if (!btn) return;
-
-            btn.addEventListener('state-changed', async function onStateChanged(e) {
-                console.log('Flash state:', e.detail.state);
-                if (e.detail.state === 'ERROR') {
-                    // ESP Web Tools doesn't release port on error - must reload
-                    setTimeout(() => location.reload(), 1500);
+                // Convert to binary string (esptool-js format)
+                let binaryString = '';
+                for (let i = 0; i < fwData.length; i++) {
+                    binaryString += String.fromCharCode(fwData[i]);
                 }
-            });
-        }
 
-        setupFlashButton();
+                // 6. Flash
+                setProgress(20, "Прошивка...");
+                flashBtnText.textContent = "Прошивка...";
+                log("Прошивка...");
+                const startTime = Date.now();
+
+                await esploader.writeFlash({
+                    fileArray: [{ data: binaryString, address: 0 }],
+                    flashSize: 'keep',
+                    flashMode: 'keep',
+                    flashFreq: 'keep',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        const pct = Math.round(20 + (written / total * 75));
+                        setProgress(pct, `Прошивка: ${Math.round(written / total * 100)}%`);
+                    }
+                });
+
+                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                log("Прошивка завершена за " + totalTime + " сек!", "success");
+
+                // 7. Hard reset
+                setProgress(98, "Перезавантаження...");
+                log("Hard reset...");
+                await transport.setDTR(false);
+                await transport.setRTS(true);
+                await new Promise(r => setTimeout(r, 100));
+                await transport.setRTS(false);
+
+                // 8. Disconnect
+                await transport.disconnect();
+                cleanUp();
+
+                // Success!
+                setProgress(100, "Готово!");
+                log("Готово! Тепер налаштуй WiFi.", "success");
+
+                flashSuccess = true;
+                wifiBtnInner.disabled = false;
+                document.getElementById('step2num').textContent = '✓';
+                document.getElementById('step2num').classList.add('done');
+                document.getElementById('step2').classList.remove('active');
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('active');
+                flashBtnText.textContent = "Прошито ✓";
+                flashBtn.classList.remove('flashing');
+
+            } catch (e) {
+                log("Помилка: " + e.message, "error");
+                console.error(e);
+
+                // Cleanup on error
+                if (transport) {
+                    try { await transport.disconnect(); } catch(err) { console.error(err); }
+                }
+                cleanUp();
+
+                flashBtn.disabled = false;
+                flashBtnText.textContent = "Прошити ESP32";
+                flashBtn.classList.remove('flashing');
+                document.getElementById('step2').classList.remove('active');
+                setProgress(0, "Помилка");
+            }
+        };
+
+        // WiFi setup result
+        wifiLauncher.addEventListener('closed', (event) => {
+            const detail = event.detail || {};
+            if (detail.success) {
+                wifiStatus.textContent = "WiFi налаштовано! Пристрій підключено до мережі.";
+                wifiStatus.classList.add('visible');
+                document.getElementById('step3num').textContent = '✓';
+                document.getElementById('step3num').classList.add('done');
+                document.getElementById('step3').classList.remove('active');
+                document.getElementById('step3').classList.add('completed');
+
+                // Auto-claim device
+                if (cachedOwnerEmail) {
+                    fetch(`${SERVER}/api/claim`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_id: currentDeviceId })
+                    }).catch(() => {});
+                }
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', async () => {
+            if (transport) {
+                try { await transport.disconnect(); } catch(e) {}
+            }
+        });
     </script>
 </body>
 </html>
