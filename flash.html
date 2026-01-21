@@ -523,33 +523,6 @@
             }
         }
 
-        // Close any open serial ports
-        async function closeOpenPorts() {
-            if (!navigator.serial) return;
-            try {
-                const ports = await navigator.serial.getPorts();
-                for (const port of ports) {
-                    try {
-                        if (port.readable) {
-                            const reader = port.readable.getReader();
-                            await reader.cancel();
-                            reader.releaseLock();
-                        }
-                        if (port.writable) {
-                            const writer = port.writable.getWriter();
-                            await writer.close();
-                            writer.releaseLock();
-                        }
-                        await port.close();
-                    } catch (e) {
-                        console.log('Port close error:', e);
-                    }
-                }
-            } catch (e) {
-                console.log('getPorts error:', e);
-            }
-        }
-
         // Setup flash button with state handling
         function setupFlashButton() {
             const btn = document.getElementById('flashBtn');
@@ -557,26 +530,9 @@
 
             btn.addEventListener('state-changed', async function onStateChanged(e) {
                 console.log('Flash state:', e.detail.state);
-                if (e.detail.state === 'INSTALLED' || e.detail.state === 'ERROR') {
-                    // Close ports and recreate button
-                    await closeOpenPorts();
-                    setTimeout(() => {
-                        const parent = btn.parentNode;
-                        const manifest = btn.getAttribute('manifest');
-                        btn.remove();
-                        const newBtn = document.createElement('esp-web-install-button');
-                        newBtn.id = 'flashBtn';
-                        newBtn.innerHTML = `
-                            <button slot="activate" class="btn-flash" id="flashBtnInner">
-                                ⚡ Прошити ESP32
-                            </button>
-                            <span slot="unsupported">Потрібен Chrome або Edge</span>
-                            <span slot="not-allowed">Натисни ще раз</span>
-                        `;
-                        if (manifest) newBtn.setAttribute('manifest', manifest);
-                        parent.appendChild(newBtn);
-                        setupFlashButton();
-                    }, 500);
+                if (e.detail.state === 'ERROR') {
+                    // ESP Web Tools doesn't release port on error - must reload
+                    setTimeout(() => location.reload(), 1500);
                 }
             });
         }
