@@ -406,6 +406,12 @@
     <script>
         const SERVER = 'https://power-monitor.club';
         let currentDeviceId = '';
+        let cachedOwnerEmail = null;
+
+        // Check login once on load
+        fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+            cachedOwnerEmail = data?.email || null;
+        }).catch(() => {});
 
         const wifiLauncher = document.getElementById('wifiLauncher');
         const wifiBtnInner = document.getElementById('wifiBtnInner');
@@ -454,12 +460,8 @@
                     improv: 'true'
                 });
 
-                // Add owner if logged in
-                fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
-                    if (data?.email) params.set('owner', data.email);
-                }).finally(() => {
-                    flashBtn.setAttribute('manifest', SERVER + '/api/manifest?' + params.toString());
-                });
+                if (cachedOwnerEmail) params.set('owner', cachedOwnerEmail);
+                flashBtn.setAttribute('manifest', SERVER + '/api/manifest?' + params.toString());
                 setWifiStatus('', { hidden: true });
             } else {
                 btn.disabled = true;
