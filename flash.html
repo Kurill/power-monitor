@@ -840,7 +840,7 @@
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
-                    eraseAll: false,
+                    eraseAll: true,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const pct = Math.round(20 + (written / total * 75));
