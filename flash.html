@@ -848,10 +848,14 @@
                 await transport.disconnect();
                 cleanUp();
 
-                // Success!
-                setProgress(100, "Готово!");
-                log("Готово! Тепер налаштуй WiFi.", "success");
+                // Success - but wait for ESP32 to boot before enabling WiFi
+                setProgress(100, "Готово! Очікуємо завантаження...");
+                log("Прошивка завершена. Очікуємо завантаження ESP32...", "success");
 
+                // Wait for ESP32 to boot (3s delay in firmware + boot time)
+                await new Promise(r => setTimeout(r, 5000));
+
+                log("Готово! Тепер налаштуй WiFi.", "success");
                 flashSuccess = true;
                 wifiBtnInner.disabled = false;
                 document.getElementById('step2num').textContent = '✓';
