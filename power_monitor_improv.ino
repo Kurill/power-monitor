@@ -11,17 +11,6 @@
 #include <ImprovWiFiLibrary.h>
 #include <Update.h>
 
-// Enter download mode - stop serial and halt
-// esptool will reset via DTR/RTS and catch bootloader
-void enterDownloadMode() {
-    Serial.flush();
-    Serial.end();
-    // Completely stop - let esptool reset us
-    while(1) {
-        __asm__ __volatile__("nop");
-    }
-}
-
 // Placeholders - patched by server before flashing
 const char DEVICE_ID[32]   = "@@DEVID@@______________________"; // 31 chars
 const char DEVICE_NAME[48] = "@@NAME@@_______________________________________"; // 47 chars
@@ -53,17 +42,6 @@ String generateDeviceId() {
     return String(id);
 }
 
-// Check first byte - if it's 0xC0 (SLIP frame), likely esptool
-void checkForBootloaderRequest() {
-    if (Serial.available()) {
-        uint8_t b = Serial.peek();
-        if (b == 0xC0) {
-            // esptool sync detected - stop and wait for hardware reset
-            enterDownloadMode();
-        }
-    }
-}
-
 // Called when Improv error occurs
 void onImprovError(ImprovTypes::Error err) {
     Serial.printf("Improv error: %d\n", err);
@@ -90,8 +68,6 @@ bool customConnectWiFi(const char* ssid, const char* password) {
 
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-        // Check for esptool during WiFi connect
-        checkForBootloaderRequest();
         delay(250);
         Serial.print(".");
         attempts++;
@@ -110,22 +86,6 @@ void setup() {
     // Start Serial FIRST to catch esptool sync
     Serial.begin(115200);
     Serial.setRxBufferSize(256);
-
-    // Wait for esptool sync - give it 500ms window after reset
-    // esptool sends 0xC0 sync frames when trying to connect
-    unsigned long bootTime = millis();
-    while (millis() - bootTime < 500) {
-        if (Serial.available()) {
-            uint8_t b = Serial.peek();
-            if (b == 0xC0) {
-                // esptool detected - stop and wait for hardware reset
-                enterDownloadMode();
-            }
-            // Not esptool - clear the byte and continue waiting
-            Serial.read();
-        }
-        delay(1);
-    }
 
     // Init WiFi (needed for MAC address)
     WiFi.mode(WIFI_STA);
@@ -181,9 +141,6 @@ void setup() {
 }
 
 void loop() {
-    // Check if esptool/browser is trying to flash
-    checkForBootloaderRequest();
-
     // Handle Improv for WiFi configuration
     improvSerial.handleSerial();
 
@@ -205,6 +162,6 @@ void loop() {
         }
     }
 
-    // Minimal delay, check for esptool frequently
+    // Minimal delay keeps loop responsive without blocking
     delay(1);
 }
