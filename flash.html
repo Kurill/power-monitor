@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Прошивка ESP32 — Power Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <style>
+        :root {
+            --bg-deep: #06060a;
+            --bg-card: #0d0d14;
+            --bg-elevated: #13131c;
+            --bg-input: #0a0a0f;
+            --electric: #fbbf24;
+            --electric-glow: rgba(251, 191, 36, 0.15);
+            --online: #22c55e;
+            --online-glow: rgba(34, 197, 94, 0.15);
+            --text: #f4f4f5;
+            --text-muted: #71717a;
+            --text-dim: #3f3f46;
+            --border: rgba(255,255,255,0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Onest', system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .grid-bg {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(251,191,36,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(251,191,36,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 32px 20px 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text);
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--electric);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 0 30px var(--electric-glow);
+        }
+
+        .logo-text {
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 800;
+            font-size: 20px;
+        }
+
+        .page-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        /* Steps */
+        .step {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--electric);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 800;
+            font-size: 14px;
+            color: var(--bg-deep);
+        }
+
+        .step-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .step-desc {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--electric);
+            box-shadow: 0 0 0 3px var(--electric-glow);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        /* Flash button */
+        .flash-section {
+            text-align: center;
+            padding: 32px 0;
+        }
+
+        .btn-flash {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 18px 32px;
+            background: var(--online);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 17px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-flash:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+
+        .btn-flash:disabled {
+            background: var(--bg-elevated);
+            color: var(--text-dim);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        esp-web-install-button {
+            display: block;
+        }
+
+        /* Info box */
+        .info-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .info-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .info-text strong {
+            color: var(--electric);
+        }
+
+        /* Feature list */
+        .feature-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .feature-icon {
+            font-size: 20px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+        }
+
+        .footer-link {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .footer-link:hover {
+            color: var(--electric);
+        }
+
+        @media (max-width: 500px) {
+            .container {
+                padding: 24px 16px 48px;
+            }
+
+            .page-title {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+
+    <div class="container">
+        <div class="header">
+            <a href="/" class="logo">
+                <div class="logo-icon">⚡</div>
+                <span class="logo-text">Power Monitor</span>
+            </a>
+            <h1 class="page-title">Прошивка ESP32</h1>
+            <p class="page-subtitle">Автоматичне налаштування WiFi</p>
+        </div>
+
+        <!-- Step 1: Name device -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <div class="step-title">Назви пристрій</div>
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-input" id="deviceName"
+                       placeholder="Наприклад: Квартира на Хрещатику"
+                       maxlength="40" oninput="updateFlashButton()">
+            </div>
+        </div>
+
+        <!-- Step 2: Flash -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <div class="step-title">Прошивка та налаштування WiFi</div>
+            </div>
+            <p class="step-desc">
+                Підключи ESP32 до USB і натисни кнопку. Після прошивки з'явиться вікно для вибору WiFi мережі.
+            </p>
+
+            <esp-web-install-button id="flashBtn">
+                <button slot="activate" class="btn-flash" id="flashBtnInner" disabled>
+                    ⚡ Прошити ESP32
+                </button>
+                <span slot="unsupported">Потрібен Chrome або Edge</span>
+                <span slot="not-allowed">Натисни ще раз</span>
+            </esp-web-install-button>
+
+            <div class="info-box">
+                <div class="info-title">💡 Як це працює</div>
+                <div class="info-text">
+                    Після прошивки ESP32 просканує WiFi мережі і покаже їх список прямо тут.
+                    Обери свою мережу, введи пароль — і готово!
+                </div>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="feature-list">
+            <div class="feature-item">
+                <span class="feature-icon">📶</span>
+                <span>Автоматичний скан WiFi мереж</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">✅</span>
+                <span>Перевірка підключення в реальному часі</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔄</span>
+                <span>Можна змінити WiFi пізніше</span>
+            </div>
+        </div>
+
+        <div class="info-box" style="margin-top: 24px;">
+            <div class="info-title">⚠️ Не працює?</div>
+            <div class="info-text">
+                Затисни кнопку <strong>BOOT</strong> на платі, натисни "Прошити", потім відпусти BOOT.
+            </div>
+        </div>
+
+        <div class="footer">
+            <a href="/" class="footer-link">← На головну</a>
+        </div>
+    </div>
+
+    <script>
+        const SERVER = 'https://power-monitor.club';
+        
+        // Listen for Improv provisioning complete
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashBtn = document.getElementById('flashBtn');
+            
+            flashBtn.addEventListener('state-changed', async (e) => {
+                console.log('State:', e.detail);
+                
+                // Check if we got a redirect URL (means WiFi configured)
+                if (e.detail.state === 'PROVISIONED' || e.detail.improv?.redirectUrl) {
+                    const url = e.detail.improv?.redirectUrl || '';
+                    const match = url.match(/[?&]claim=([^&]+)/);
+                    
+                    if (match) {
+                        const deviceId = match[1];
+                        console.log('Auto-claiming device:', deviceId);
+                        
+                        try {
+                            const res = await fetch('/api/claim?device=' + encodeURIComponent(deviceId));
+                            if (res.ok) {
+                                // Show success and redirect
+                                setTimeout(() => {
+                                    window.location.href = '/dashboard';
+                                }, 1500);
+                            }
+                        } catch (err) {
+                            console.error('Claim failed:', err);
+                        }
+                    }
+                }
+            });
+        });
+
+        function generateId(name) {
+            const slug = name.toLowerCase()
+                .replace(/[а-яіїєґ]/g, c => {
+                    const map = {'а':'a','б':'b','в':'v','г':'h','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya'};
+                    return map[c] || c;
+                })
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_|_$/g, '')
+                .substring(0, 20);
+            const hash = Math.random().toString(36).substring(2, 6);
+            return slug + '_' + hash;
+        }
+
+        function updateFlashButton() {
+            const name = document.getElementById('deviceName').value.trim();
+            const btn = document.getElementById('flashBtnInner');
+            const flashBtn = document.getElementById('flashBtn');
+
+            if (name.length >= 3) {
+                btn.disabled = false;
+                const deviceId = generateId(name);
+
+                const params = new URLSearchParams({
+                    device: deviceId,
+                    name: name,
+                    server: '178.62.112.232',
+                    improv: 'true'
+                });
+
+                // Add owner if logged in
+                fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+                    if (data?.email) params.set('owner', data.email);
+                }).finally(() => {
+                    flashBtn.setAttribute('manifest', SERVER + '/api/manifest?' + params.toString());
+                });
+            } else {
+                btn.disabled = true;
+            }
+        }
+    </script>
+</body>
+</html>

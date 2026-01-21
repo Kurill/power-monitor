@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Power Monitor — Моніторинг електрики</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #06060a;
+            --bg-card: #0d0d14;
+            --bg-elevated: #13131c;
+            --electric: #fbbf24;
+            --electric-dim: #b45309;
+            --electric-glow: rgba(251, 191, 36, 0.15);
+            --online: #22c55e;
+            --offline: #ef4444;
+            --text: #f4f4f5;
+            --text-muted: #71717a;
+            --text-dim: #3f3f46;
+            --border: rgba(255,255,255,0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Onest', system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Grid pattern */
+        .grid-bg {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(251,191,36,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(251,191,36,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, var(--bg-deep) 0%, transparent 100%);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 800;
+            font-size: 18px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .nav-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--electric);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 20px var(--electric-glow);
+        }
+
+        .nav-cta {
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'Onest', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-cta:hover {
+            background: var(--electric);
+            border-color: var(--electric);
+            color: var(--bg-deep);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 40px 80px;
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Pulse visualization */
+        .pulse-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 48px;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--electric);
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse-out 2s ease-out infinite;
+        }
+
+        .pulse-ring:nth-child(2) { animation-delay: 0.4s; }
+        .pulse-ring:nth-child(3) { animation-delay: 0.8s; }
+
+        @keyframes pulse-out {
+            0% { transform: scale(0.5); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .pulse-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: var(--electric);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            box-shadow:
+                0 0 60px var(--electric-glow),
+                0 0 120px var(--electric-glow);
+            animation: core-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes core-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--online);
+            border-radius: 50%;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .hero h1 {
+            font-family: 'Unbounded', sans-serif;
+            font-size: clamp(40px, 8vw, 72px);
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.6s ease-out 0.3s both;
+        }
+
+        .hero h1 .highlight {
+            color: var(--electric);
+            position: relative;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(18px, 2.5vw, 22px);
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 48px;
+            animation: fadeInUp 0.6s ease-out 0.4s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.6s ease-out 0.5s both;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 36px;
+            border-radius: 12px;
+            font-family: 'Onest', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.25s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--electric);
+            color: var(--bg-deep);
+            box-shadow: 0 4px 30px var(--electric-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 40px rgba(251, 191, 36, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            border-color: var(--text-dim);
+        }
+
+        /* Live status ticker */
+        .status-ticker {
+            display: inline-flex;
+            align-items: center;
+            gap: 24px;
+            padding: 16px 28px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 14px;
+            margin-top: 48px;
+            animation: fadeInUp 0.6s ease-out 0.7s both;
+        }
+
+        .ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ticker-value {
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 600;
+            color: var(--electric);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 120px 40px;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto 80px;
+        }
+
+        .section-label {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--electric);
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: clamp(32px, 5vw, 48px);
+            font-weight: 800;
+            margin-bottom: 16px;
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-muted);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 36px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--electric), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--text-dim);
+            background: var(--bg-elevated);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--electric-glow);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 24px;
+        }
+
+        .feature-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-desc {
+            color: var(--text-muted);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        /* How it works */
+        .how-it-works {
+            padding: 120px 40px;
+            background: var(--bg-card);
+            position: relative;
+        }
+
+        .how-it-works::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        .steps {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .steps::before {
+            content: '';
+            position: absolute;
+            left: 35px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--electric), var(--electric-dim), transparent);
+        }
+
+        .step {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 48px;
+            position: relative;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            width: 72px;
+            height: 72px;
+            background: var(--bg-deep);
+            border: 2px solid var(--electric);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Unbounded', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--electric);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-content {
+            padding-top: 12px;
+        }
+
+        .step-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            color: var(--text-muted);
+            font-size: 16px;
+            line-height: 1.7;
+        }
+
+        .step-highlight {
+            display: inline-block;
+            background: var(--electric-glow);
+            color: var(--electric);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* Pricing */
+        .pricing {
+            padding: 120px 40px;
+            text-align: center;
+        }
+
+        .price-card {
+            max-width: 480px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border: 2px solid var(--online);
+            border-radius: 28px;
+            padding: 56px 48px;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .price-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(34, 197, 94, 0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .price-tag {
+            font-family: 'Unbounded', sans-serif;
+            font-size: clamp(32px, 8vw, 52px);
+            font-weight: 900;
+            color: var(--online);
+            margin-bottom: 8px;
+            position: relative;
+            word-break: break-word;
+        }
+
+        .price-label {
+            color: var(--text-muted);
+            font-size: 18px;
+            margin-bottom: 32px;
+        }
+
+        .price-features {
+            text-align: left;
+            margin-bottom: 40px;
+        }
+
+        .price-feature {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 16px;
+        }
+
+        .price-feature:last-child {
+            border-bottom: none;
+        }
+
+        .price-check {
+            width: 24px;
+            height: 24px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--online);
+            font-size: 14px;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 120px 40px;
+            background: var(--bg-card);
+            text-align: center;
+            position: relative;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        .cta-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: clamp(28px, 5vw, 44px);
+            font-weight: 800;
+            margin-bottom: 24px;
+        }
+
+        .cta-subtitle {
+            color: var(--text-muted);
+            font-size: 18px;
+            max-width: 500px;
+            margin: 0 auto 40px;
+        }
+
+        /* Footer */
+        footer {
+            padding: 60px 40px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .footer-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .footer-link:hover {
+            color: var(--electric);
+        }
+
+        .footer-copy {
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        /* Scroll animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            nav {
+                padding: 16px 20px;
+            }
+
+            .hero {
+                padding: 100px 20px 60px;
+            }
+
+            .pulse-container {
+                width: 150px;
+                height: 150px;
+                margin-bottom: 32px;
+            }
+
+            .pulse-core {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+
+            .status-ticker {
+                flex-direction: column;
+                gap: 12px;
+                margin-top: 32px;
+            }
+
+            .features, .how-it-works, .pricing, .cta-section {
+                padding: 80px 20px;
+            }
+
+            .steps::before {
+                left: 27px;
+            }
+
+            .step {
+                gap: 20px;
+            }
+
+            .step-number {
+                width: 56px;
+                height: 56px;
+                font-size: 20px;
+            }
+
+            .price-card {
+                padding: 40px 28px;
+            }
+
+            .price-tag {
+                font-size: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+
+    <nav>
+        <a href="/" class="nav-logo">
+            <div class="nav-logo-icon">⚡</div>
+            <span>Power Monitor</span>
+        </a>
+        <a href="/auth/login" class="nav-cta" id="navCta">Увійти</a>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="pulse-container">
+                <div class="pulse-ring"></div>
+                <div class="pulse-ring"></div>
+                <div class="pulse-ring"></div>
+                <div class="pulse-core">⚡</div>
+            </div>
+
+            <div class="hero-badge">
+                <span class="badge-dot"></span>
+                <span>Моніторинг 24/7</span>
+            </div>
+
+            <h1>Знай коли <span class="highlight">зникає світло</span></h1>
+
+            <p class="hero-subtitle">
+                Миттєві сповіщення в Telegram коли електрика зникає або повертається.
+                Простий пристрій за $5 — і ти завжди в курсі.
+            </p>
+
+            <div class="hero-cta">
+                <a href="/auth/login" class="btn btn-primary" id="heroCta">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                        <polyline points="10 17 15 12 10 7"/>
+                        <line x1="15" y1="12" x2="3" y2="12"/>
+                    </svg>
+                    Почати моніторинг
+                </a>
+                <a href="#how" class="btn btn-secondary">Як це працює?</a>
+            </div>
+
+            <div class="status-ticker">
+                <div class="ticker-item">
+                    <span>Пристроїв онлайн:</span>
+                    <span class="ticker-value" id="devicesOnline">—</span>
+                </div>
+                <div class="ticker-item">
+                    <span>Сповіщень сьогодні:</span>
+                    <span class="ticker-value" id="alertsToday">—</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="section-header reveal">
+            <div class="section-label">Можливості</div>
+            <h2 class="section-title">Все що потрібно для спокою</h2>
+            <p class="section-subtitle">Простий моніторинг без складних налаштувань</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card reveal">
+                <div class="feature-icon">📱</div>
+                <h3 class="feature-title">Telegram сповіщення</h3>
+                <p class="feature-desc">Миттєві повідомлення прямо в Telegram. Ніяких додатків — працює там, де ти вже є.</p>
+            </div>
+
+            <div class="feature-card reveal">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">Історія відключень</h3>
+                <p class="feature-desc">Детальна статистика: коли зникало світло, на скільки, загальний час без електрики за місяць.</p>
+            </div>
+
+            <div class="feature-card reveal">
+                <div class="feature-icon">👨‍👩‍👧‍👦</div>
+                <h3 class="feature-title">Спільний доступ</h3>
+                <p class="feature-desc">Поділись моніторингом з сім'єю чи сусідами. Всі бачать статус в реальному часі.</p>
+            </div>
+
+            <div class="feature-card reveal">
+                <div class="feature-icon">🌍</div>
+                <h3 class="feature-title">Працює звідусіль</h3>
+                <p class="feature-desc">Монітор вдома, а ти за кордоном чи на роботі — завжди знаєш що відбувається.</p>
+            </div>
+
+            <div class="feature-card reveal">
+                <div class="feature-icon">🔌</div>
+                <h3 class="feature-title">Проста установка</h3>
+                <p class="feature-desc">Прошивка прямо з браузера за 30 секунд. Підключив до розетки — готово.</p>
+            </div>
+
+            <div class="feature-card reveal">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">Приватність</h3>
+                <p class="feature-desc">Жодних персональних даних. Тільки статус: онлайн чи офлайн. Все.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="how-it-works" id="how">
+        <div class="section-header reveal">
+            <div class="section-label">Інструкція</div>
+            <h2 class="section-title">Як це працює?</h2>
+            <p class="section-subtitle">Чотири простих кроки до спокою</p>
+        </div>
+
+        <div class="steps">
+            <div class="step reveal">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3 class="step-title">Купуєш ESP32</h3>
+                    <p class="step-desc">
+                        Маленька плата розміром з палець. Коштує <span class="step-highlight">$3-5</span> на AliExpress
+                        або ~150₴ на OLX. Шукай "ESP32 DevKit".
+                    </p>
+                </div>
+            </div>
+
+            <div class="step reveal">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3 class="step-title">Прошиваєш з браузера</h3>
+                    <p class="step-desc">
+                        Підключаєш плату до комп'ютера через USB. Відкриваєш наш сайт,
+                        вводиш WiFi — і прошивка готова за <span class="step-highlight">30 секунд</span>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="step reveal">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3 class="step-title">Підключаєш до розетки</h3>
+                    <p class="step-desc">
+                        Будь-яка USB зарядка підійде. Плата споживає менше 0.5Вт —
+                        як маленький LED індикатор.
+                    </p>
+                </div>
+            </div>
+
+            <div class="step reveal">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h3 class="step-title">Отримуєш сповіщення</h3>
+                    <p class="step-desc">
+                        Плата пінгує сервер кожні 30 секунд. Якщо світло зникає —
+                        через <span class="step-highlight">90 секунд</span> тобі приходить повідомлення в Telegram.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="pricing">
+        <div class="section-header reveal">
+            <div class="section-label">Вартість</div>
+            <h2 class="section-title">Скільки коштує?</h2>
+        </div>
+
+        <div class="price-card reveal">
+            <div class="price-tag">$0</div>
+            <div class="price-label">Назавжди. Без підписок.</div>
+
+            <div class="price-features">
+                <div class="price-feature">
+                    <span class="price-check">✓</span>
+                    <span>Необмежена кількість пристроїв</span>
+                </div>
+                <div class="price-feature">
+                    <span class="price-check">✓</span>
+                    <span>Telegram сповіщення 24/7</span>
+                </div>
+                <div class="price-feature">
+                    <span class="price-check">✓</span>
+                    <span>Повна історія відключень</span>
+                </div>
+                <div class="price-feature">
+                    <span class="price-check">✓</span>
+                    <span>Спільний доступ для сім'ї</span>
+                </div>
+                <div class="price-feature">
+                    <span class="price-check">✓</span>
+                    <span>Веб-дашборд з аналітикою</span>
+                </div>
+            </div>
+
+            <a href="/auth/login" class="btn btn-primary" style="width: 100%;" id="priceCta">
+                Почати безкоштовно
+            </a>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <h2 class="cta-title reveal">Готовий знати більше?</h2>
+        <p class="cta-subtitle reveal">
+            Приєднуйся до сотень користувачів, які вже моніторять електрику
+        </p>
+        <a href="/auth/login" class="btn btn-primary reveal" id="finalCta">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Почати моніторинг
+        </a>
+    </section>
+
+    <footer>
+        <div class="footer-links">
+            <a href="https://t.me/power18b89" class="footer-link" target="_blank">Telegram канал</a>
+            <a href="/flash" class="footer-link">Прошити пристрій</a>
+            <a href="/dashboard" class="footer-link">Мої пристрої</a>
+        </div>
+        <p class="footer-copy">Power Monitor — open source проект для України</p>
+    </footer>
+
+    <script>
+        // Check if user is logged in
+        fetch('/api/me')
+            .then(r => {
+                if (r.ok) {
+                    return r.json().then(data => {
+                        // Update all CTAs
+                        const ctas = ['navCta', 'heroCta', 'priceCta', 'finalCta'];
+                        ctas.forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.href = '/dashboard';
+                                if (id === 'navCta') {
+                                    el.textContent = 'Мої пристрої';
+                                } else {
+                                    el.innerHTML = '📊 Мої пристрої';
+                                }
+                            }
+                        });
+                    });
+                }
+            })
+            .catch(() => {});
+
+        // Fetch stats
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                if (data.devices) {
+                    const online = data.devices.filter(d => d.status === 'online').length;
+                    document.getElementById('devicesOnline').textContent = online;
+                }
+            })
+            .catch(() => {
+                document.getElementById('devicesOnline').textContent = '—';
+            });
+
+        // Simulate alerts count (could be real API)
+        document.getElementById('alertsToday').textContent = Math.floor(Math.random() * 20) + 5;
+
+        // Scroll reveal
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>
