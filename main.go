@@ -868,7 +868,7 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	manifest := map[string]interface{}{
-		"name": "Power Monitor - " + device, "version": "1.0",
+		"name": "Power Monitor - " + device, "version": "1.0", "new_install_improv_wait_time": 0,
 		"builds": []map[string]interface{}{{
 			"chipFamily": "ESP32",
 			"parts": []map[string]interface{}{{"path": "/api/firmware?" + params.Encode(), "offset": 0}},
