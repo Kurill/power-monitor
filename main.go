@@ -156,9 +156,9 @@ func saveEvent(deviceID, eventType string, ts time.Time, durationSec int64) {
 }
 
 func loadLastState(deviceID string) (*DeviceState, error) {
-	state := &DeviceState{
-		LastPing: time.Now(),
-		UpSince:  time.Now(),
+	state := &DeviceState{IsDown: true, DownSince: time.Now(),
+		LastPing: time.Time{},
+		
 	}
 
 	var eventType string
@@ -476,7 +476,7 @@ func main() {
 
 	for deviceID := range devices {
 		state, _ := loadLastState(deviceID)
-		state.LastPing = time.Now()
+		// state.LastPing loaded from DB
 		states[deviceID] = state
 	}
 
@@ -657,7 +657,7 @@ func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	for id, d := range devices {
 		state := states[id]
 		if state == nil {
-			state = &DeviceState{LastPing: time.Now(), UpSince: time.Now()}
+			state = &DeviceState{IsDown: true, LastPing: time.Time{}, DownSince: time.Now()}
 		}
 		status := "up"
 		since := state.UpSince
@@ -737,7 +737,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 		states[deviceID] = state
 	}
 
-	state.LastPing = time.Now()
+	// state.LastPing loaded from DB
 	wasDown := state.IsDown
 	downTime := state.DownSince
 	state.IsDown = false
@@ -850,7 +850,7 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 				OwnerEmail:  ownerEmail,
 			}
 			devices[device] = d
-			states[device] = &DeviceState{LastPing: time.Now(), UpSince: time.Now()}
+			states[device] = &DeviceState{LastPing: time.Time{}, UpSince: time.Now()}
 			saveDevice(d)
 			log.Printf("Pre-registered device: %s (%s) owner=%s", device, name, ownerEmail)
 		}

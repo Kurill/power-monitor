@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2.5.0/dist/serial-launch-button.js?module"></script>
     <style>
         :root {
             --bg-deep: #06060a;
@@ -229,6 +230,8 @@
             padding: 16px;
             margin-top: 16px;
         }
+        .info-box.success { border-color: rgba(34,197,94,0.5); }
+        .info-box.error { border-color: rgba(239,68,68,0.5); }
 
         .info-title {
             font-weight: 600;
@@ -328,10 +331,10 @@
         <div class="step">
             <div class="step-header">
                 <div class="step-number">2</div>
-                <div class="step-title">Прошивка та налаштування WiFi</div>
+                <div class="step-title">Прошивка</div>
             </div>
             <p class="step-desc">
-                Підключи ESP32 до USB і натисни кнопку. Після прошивки з'явиться вікно для вибору WiFi мережі.
+                Підключи ESP32 до USB і натисни кнопку. Після успішної прошивки переходь до кроку 3, щоб налаштувати WiFi.
             </p>
 
             <esp-web-install-button id="flashBtn">
@@ -345,9 +348,30 @@
             <div class="info-box">
                 <div class="info-title">💡 Як це працює</div>
                 <div class="info-text">
-                    Після прошивки ESP32 просканує WiFi мережі і покаже їх список прямо тут.
-                    Обери свою мережу, введи пароль — і готово!
+                    Після прошивки пристрій перезавантажиться з новою ОС. На кроці 3 він попросить
+                    дані WiFi через Improv — сторінка відкриє вікно налаштування.
                 </div>
+            </div>
+        </div>
+
+        <!-- Step 3: WiFi -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <div class="step-title">Підключення до WiFi</div>
+            </div>
+            <p class="step-desc">
+                Після прошивки натисни кнопку нижче. Зʼявиться Improv-майстер: обери мережу та введи пароль.
+            </p>
+            <improv-wifi-serial-launch-button id="wifiLauncher">
+                <button slot="activate" class="btn-flash btn-wifi" id="wifiBtnInner" disabled>
+                    📡 Налаштувати WiFi
+                </button>
+                <span slot="unsupported">Потрібен Chrome або Edge</span>
+            </improv-wifi-serial-launch-button>
+            <div class="info-box" id="wifiStatusBox" hidden>
+                <div class="info-title">📡 Статус WiFi</div>
+                <div class="info-text" id="wifiStatusText"></div>
             </div>
         </div>
 
@@ -368,9 +392,9 @@
         </div>
 
         <div class="info-box" style="margin-top: 24px;">
-            <div class="info-title">⚠️ Не працює?</div>
+            <div class="info-title">⚠️ Якщо не прошивається</div>
             <div class="info-text">
-                Затисни кнопку <strong>BOOT</strong> на платі, натисни "Прошити", потім відпусти BOOT.
+                Утримуй кнопку <strong>BOOT</strong> на платі, натискаючи «Прошити ESP32». Відпусти BOOT, коли процес почнеться.
             </div>
         </div>
 
@@ -381,37 +405,22 @@
 
     <script>
         const SERVER = 'https://power-monitor.club';
-        
-        // Listen for Improv provisioning complete
-        document.addEventListener('DOMContentLoaded', () => {
-            const flashBtn = document.getElementById('flashBtn');
-            
-            flashBtn.addEventListener('state-changed', async (e) => {
-                console.log('State:', e.detail);
-                
-                // Check if we got a redirect URL (means WiFi configured)
-                if (e.detail.state === 'PROVISIONED' || e.detail.improv?.redirectUrl) {
-                    const url = e.detail.improv?.redirectUrl || '';
-                    const match = url.match(/[?&]claim=([^&]+)/);
-                    
-                    if (match) {
-                        const deviceId = match[1];
-                        console.log('Auto-claiming device:', deviceId);
-                        
-                        try {
-                            const res = await fetch('/api/claim?device=' + encodeURIComponent(deviceId));
-                            if (res.ok) {
-                                // Show success and redirect
-                                setTimeout(() => {
-                                    window.location.href = '/dashboard';
-                                }, 1500);
-                            }
-                        } catch (err) {
-                            console.error('Claim failed:', err);
-                        }
-                    }
-                }
-            });
+        let currentDeviceId = '';
+
+        const wifiLauncher = document.getElementById('wifiLauncher');
+        const wifiBtnInner = document.getElementById('wifiBtnInner');
+        const wifiStatusBox = document.getElementById('wifiStatusBox');
+        const wifiStatusText = document.getElementById('wifiStatusText');
+
+        wifiBtnInner.addEventListener('click', (event) => {
+            if (wifiBtnInner.disabled) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+
+        wifiLauncher.addEventListener('closed', (event) => {
+            handleWifiResult(event.detail || {});
         });
 
         function generateId(name) {
@@ -431,13 +440,15 @@
             const name = document.getElementById('deviceName').value.trim();
             const btn = document.getElementById('flashBtnInner');
             const flashBtn = document.getElementById('flashBtn');
+            const wifiBtn = document.getElementById('wifiBtnInner');
 
             if (name.length >= 3) {
                 btn.disabled = false;
-                const deviceId = generateId(name);
+                currentDeviceId = generateId(name);
+                wifiBtn.disabled = false;
 
                 const params = new URLSearchParams({
-                    device: deviceId,
+                    device: currentDeviceId,
                     name: name,
                     server: '178.62.112.232',
                     improv: 'true'
@@ -449,8 +460,64 @@
                 }).finally(() => {
                     flashBtn.setAttribute('manifest', SERVER + '/api/manifest?' + params.toString());
                 });
+                setWifiStatus('', { hidden: true });
             } else {
                 btn.disabled = true;
+                currentDeviceId = '';
+                wifiBtn.disabled = true;
+                setWifiStatus('', { hidden: true });
+            }
+        }
+
+        function setWifiStatus(message, options = {}) {
+            const { hidden = false, tone } = options;
+            wifiStatusBox.classList.remove('success', 'error');
+            if (hidden || !message) {
+                wifiStatusBox.hidden = true;
+                wifiStatusText.textContent = '';
+                return;
+            }
+            wifiStatusBox.hidden = false;
+            if (tone === 'success') wifiStatusBox.classList.add('success');
+            if (tone === 'error') wifiStatusBox.classList.add('error');
+            wifiStatusText.textContent = message;
+        }
+
+        async function handleWifiResult(detail) {
+            if (!detail?.improv) {
+                setWifiStatus('Пристрій не відповів через Improv. Переконайся, що він прошитий цією сторінкою.', { tone: 'error' });
+                return;
+            }
+            if (!detail.provisioned) {
+                setWifiStatus('Налаштування WiFi скасовано. Спробуй ще раз.', { tone: 'error' });
+                return;
+            }
+
+            let claimed = false;
+            if (currentDeviceId) {
+                claimed = await claimDevice(currentDeviceId);
+            }
+
+            const successMessage = claimed
+                ? 'WiFi збережено, пристрій додано до акаунта. Відкриваю дашборд…'
+                : 'WiFi збережено. Перевір пристрій у дашборді.';
+
+            setWifiStatus(successMessage, { tone: 'success' });
+
+            if (claimed) {
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            }
+        }
+
+        async function claimDevice(deviceId) {
+            try {
+                const res = await fetch('/api/claim?device=' + encodeURIComponent(deviceId));
+                return res.ok;
+            } catch (err) {
+                console.error('Claim failed:', err);
+                return false;
             }
         }
     </script>
