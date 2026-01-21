@@ -521,8 +521,26 @@
             }
         }
 
+        // Close any open serial ports before flashing
+        async function closeOpenPorts() {
+            if (!navigator.serial) return;
+            try {
+                const ports = await navigator.serial.getPorts();
+                for (const port of ports) {
+                    if (port.readable || port.writable) {
+                        try { await port.close(); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
+        }
+
         // Reset flash button after install completes
         const flashBtn = document.getElementById('flashBtn');
+
+        // Close ports before starting flash
+        flashBtn.addEventListener('click', async (e) => {
+            await closeOpenPorts();
+        }, true);
         flashBtn.addEventListener('state-changed', (e) => {
             if (e.detail.state === 'INSTALLED' || e.detail.state === 'ERROR') {
                 // Recreate button to reset internal state
