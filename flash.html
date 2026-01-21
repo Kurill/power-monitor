@@ -520,6 +520,31 @@
                 return false;
             }
         }
+
+        // Reset flash button after install completes
+        const flashBtn = document.getElementById('flashBtn');
+        flashBtn.addEventListener('state-changed', (e) => {
+            if (e.detail.state === 'INSTALLED' || e.detail.state === 'ERROR') {
+                // Recreate button to reset internal state
+                setTimeout(() => {
+                    const parent = flashBtn.parentNode;
+                    const manifest = flashBtn.getAttribute('manifest');
+                    const newBtn = document.createElement('esp-web-install-button');
+                    newBtn.id = 'flashBtn';
+                    newBtn.innerHTML = `
+                        <button slot="activate" class="btn-flash" id="flashBtnInner">
+                            ⚡ Прошити ESP32
+                        </button>
+                        <span slot="unsupported">Потрібен Chrome або Edge</span>
+                        <span slot="not-allowed">Натисни ще раз</span>
+                    `;
+                    if (manifest) newBtn.setAttribute('manifest', manifest);
+                    parent.replaceChild(newBtn, flashBtn);
+                    // Re-attach listener to new button
+                    newBtn.addEventListener('state-changed', arguments.callee);
+                }, 1000);
+            }
+        });
     </script>
 </body>
 </html>
