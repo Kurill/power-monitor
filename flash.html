@@ -509,6 +509,21 @@
             box-shadow: none;
         }
 
+        .wifi-btn.pulse-attention {
+            animation: attention-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes attention-pulse {
+            0%, 100% {
+                box-shadow: 0 4px 20px var(--success-glow);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 4px 40px var(--success-glow), 0 0 60px var(--success-glow);
+                transform: scale(1.02);
+            }
+        }
+
         .wifi-status {
             margin-top: 16px;
             padding: 14px 18px;
@@ -855,12 +870,14 @@
                 // Wait for ESP32 to boot (3s delay in firmware + boot time)
                 await new Promise(r => setTimeout(r, 5000));
 
-                log("Запуск налаштування WiFi...", "success");
+                log("Готово! Натисни кнопку нижче для налаштування WiFi.", "success");
                 flashSuccess = true;
                 wifiBtnInner.disabled = false;
 
-                // Auto-launch WiFi setup
-                wifiBtnInner.click();
+                // Highlight WiFi button and scroll to it
+                document.getElementById('step3').classList.add('active');
+                wifiBtnInner.classList.add('pulse-attention');
+                wifiBtnInner.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 document.getElementById('step2num').textContent = '✓';
                 document.getElementById('step2num').classList.add('done');
                 document.getElementById('step2').classList.remove('active');
