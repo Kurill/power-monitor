@@ -812,6 +812,11 @@ func formatDuration(d time.Duration) string {
 }
 
 func flashPageHandler(w http.ResponseWriter, r *http.Request) {
+	email := getSessionEmail(r)
+	if email == "" {
+		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
+		return
+	}
 	content, _ := os.ReadFile("/opt/power-monitor/flash.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(content)
