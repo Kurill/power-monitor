@@ -855,9 +855,12 @@
                 // Wait for ESP32 to boot (3s delay in firmware + boot time)
                 await new Promise(r => setTimeout(r, 5000));
 
-                log("Готово! Тепер налаштуй WiFi.", "success");
+                log("Запуск налаштування WiFi...", "success");
                 flashSuccess = true;
                 wifiBtnInner.disabled = false;
+
+                // Auto-launch WiFi setup
+                wifiBtnInner.click();
                 document.getElementById('step2num').textContent = '✓';
                 document.getElementById('step2num').classList.add('done');
                 document.getElementById('step2').classList.remove('active');
