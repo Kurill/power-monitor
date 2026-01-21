@@ -521,48 +521,65 @@
             }
         }
 
-        // Close any open serial ports before flashing
+        // Close any open serial ports
         async function closeOpenPorts() {
             if (!navigator.serial) return;
             try {
                 const ports = await navigator.serial.getPorts();
                 for (const port of ports) {
-                    if (port.readable || port.writable) {
-                        try { await port.close(); } catch (e) {}
+                    try {
+                        if (port.readable) {
+                            const reader = port.readable.getReader();
+                            await reader.cancel();
+                            reader.releaseLock();
+                        }
+                        if (port.writable) {
+                            const writer = port.writable.getWriter();
+                            await writer.close();
+                            writer.releaseLock();
+                        }
+                        await port.close();
+                    } catch (e) {
+                        console.log('Port close error:', e);
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.log('getPorts error:', e);
+            }
         }
 
-        // Reset flash button after install completes
-        const flashBtn = document.getElementById('flashBtn');
+        // Setup flash button with state handling
+        function setupFlashButton() {
+            const btn = document.getElementById('flashBtn');
+            if (!btn) return;
 
-        // Close ports before starting flash
-        flashBtn.addEventListener('click', async (e) => {
-            await closeOpenPorts();
-        }, true);
-        flashBtn.addEventListener('state-changed', (e) => {
-            if (e.detail.state === 'INSTALLED' || e.detail.state === 'ERROR') {
-                // Recreate button to reset internal state
-                setTimeout(() => {
-                    const parent = flashBtn.parentNode;
-                    const manifest = flashBtn.getAttribute('manifest');
-                    const newBtn = document.createElement('esp-web-install-button');
-                    newBtn.id = 'flashBtn';
-                    newBtn.innerHTML = `
-                        <button slot="activate" class="btn-flash" id="flashBtnInner">
-                            ⚡ Прошити ESP32
-                        </button>
-                        <span slot="unsupported">Потрібен Chrome або Edge</span>
-                        <span slot="not-allowed">Натисни ще раз</span>
-                    `;
-                    if (manifest) newBtn.setAttribute('manifest', manifest);
-                    parent.replaceChild(newBtn, flashBtn);
-                    // Re-attach listener to new button
-                    newBtn.addEventListener('state-changed', arguments.callee);
-                }, 1000);
-            }
-        });
+            btn.addEventListener('state-changed', async function onStateChanged(e) {
+                console.log('Flash state:', e.detail.state);
+                if (e.detail.state === 'INSTALLED' || e.detail.state === 'ERROR') {
+                    // Close ports and recreate button
+                    await closeOpenPorts();
+                    setTimeout(() => {
+                        const parent = btn.parentNode;
+                        const manifest = btn.getAttribute('manifest');
+                        btn.remove();
+                        const newBtn = document.createElement('esp-web-install-button');
+                        newBtn.id = 'flashBtn';
+                        newBtn.innerHTML = `
+                            <button slot="activate" class="btn-flash" id="flashBtnInner">
+                                ⚡ Прошити ESP32
+                            </button>
+                            <span slot="unsupported">Потрібен Chrome або Edge</span>
+                            <span slot="not-allowed">Натисни ще раз</span>
+                        `;
+                        if (manifest) newBtn.setAttribute('manifest', manifest);
+                        parent.appendChild(newBtn);
+                        setupFlashButton();
+                    }, 500);
+                }
+            });
+        }
+
+        setupFlashButton();
     </script>
 </body>
 </html>
