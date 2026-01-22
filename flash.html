@@ -829,8 +829,15 @@
                     binaryString += String.fromCharCode(fwData[i]);
                 }
 
-                // 6. Flash
-                setProgress(20, "Прошивка...");
+                // 6. Erase entire flash (including NVS with saved WiFi)
+                setProgress(15, "Стирання flash...");
+                flashBtnText.textContent = "Стирання...";
+                log("Стирання flash (включно з налаштуваннями)...");
+                await esploader.eraseFlash();
+                log("Flash стерто", "success");
+
+                // 7. Flash
+                setProgress(25, "Прошивка...");
                 flashBtnText.textContent = "Прошивка...";
                 log("Прошивка...");
                 const startTime = Date.now();
@@ -840,7 +847,7 @@
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
-                    eraseAll: true,
+                    eraseAll: false,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const pct = Math.round(20 + (written / total * 75));
@@ -851,7 +858,7 @@
                 const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
                 log("Прошивка завершена за " + totalTime + " сек!", "success");
 
-                // 7. Hard reset
+                // 8. Hard reset
                 setProgress(98, "Перезавантаження...");
                 log("Hard reset...");
                 await transport.setDTR(false);
@@ -859,7 +866,7 @@
                 await new Promise(r => setTimeout(r, 100));
                 await transport.setRTS(false);
 
-                // 8. Disconnect
+                // 9. Disconnect
                 await transport.disconnect();
                 cleanUp();
 
