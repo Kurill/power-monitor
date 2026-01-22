@@ -576,38 +576,6 @@
             border-color: var(--electric);
         }
 
-        .wifi-scan-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .wifi-scan-btn {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg-input);
-            color: var(--text-primary);
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .wifi-scan-btn:hover {
-            border-color: var(--electric);
-            background: var(--electric-subtle);
-        }
-
-        .wifi-scan-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
         .wifi-network-list {
             max-height: 180px;
             overflow-y: auto;
@@ -865,14 +833,8 @@
                     <div class="wifi-dialog-content">
                         <h3>Налаштування WiFi</h3>
                         <div id="wifiForm">
-                            <div class="wifi-scan-row">
-                                <button id="wifiScan" class="wifi-scan-btn">
-                                    <span>🔍</span>
-                                    <span>Сканувати мережі</span>
-                                </button>
-                            </div>
                             <div id="wifiNetworkList" class="wifi-network-list">
-                                <div class="wifi-network-empty">Натисніть "Сканувати" для пошуку мереж</div>
+                                <div class="wifi-network-empty">Сканування мереж...</div>
                             </div>
                             <input type="text" id="wifiSsid" placeholder="Або введіть SSID вручну" class="wifi-input">
                             <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
@@ -1136,7 +1098,6 @@
         const wifiPass = document.getElementById('wifiPass');
         const wifiConnectBtn = document.getElementById('wifiConnect');
         const wifiCloseBtn = document.getElementById('wifiClose');
-        const wifiScanBtn = document.getElementById('wifiScan');
         const wifiLogEl = document.getElementById('wifiLog');
 
         let improvPort = null;
@@ -1384,7 +1345,6 @@
         // WiFi scan - RPC command 0x04
         async function improvScanNetworks() {
             wifiLog('Сканування мереж...');
-            wifiScanBtn.disabled = true;
             wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Сканування...</div>';
 
             try {
@@ -1508,8 +1468,6 @@
                 console.error('Scan error:', e);
                 wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Помилка сканування</div>';
             }
-
-            wifiScanBtn.disabled = false;
         }
 
         function selectNetwork(item, ssid) {
@@ -1520,15 +1478,6 @@
             wifiSsid.value = ssid;
             wifiPass.focus();
         }
-
-        // Scan button click
-        wifiScanBtn.onclick = async () => {
-            if (!improvPort) {
-                wifiLog('Спочатку підключіться до порту', 'error');
-                return;
-            }
-            await improvScanNetworks();
-        };
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', async () => {
