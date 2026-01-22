@@ -582,20 +582,20 @@
             margin-bottom: 12px;
         }
 
-        .wifi-select {
-            flex: 1;
-            margin-bottom: 0;
-        }
-
         .wifi-scan-btn {
+            flex: 1;
             padding: 12px 16px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: var(--bg-input);
             color: var(--text-primary);
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .wifi-scan-btn:hover {
@@ -606,6 +606,94 @@
         .wifi-scan-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .wifi-network-list {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            background: var(--bg-input);
+        }
+
+        .wifi-network-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .wifi-network-list::-webkit-scrollbar-track {
+            background: var(--bg-surface);
+            border-radius: 3px;
+        }
+
+        .wifi-network-list::-webkit-scrollbar-thumb {
+            background: var(--text-tertiary);
+            border-radius: 3px;
+        }
+
+        .wifi-network-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.15s;
+        }
+
+        .wifi-network-item:last-child {
+            border-bottom: none;
+        }
+
+        .wifi-network-item:hover {
+            background: var(--electric-subtle);
+        }
+
+        .wifi-network-item.selected {
+            background: var(--electric-subtle);
+            border-left: 3px solid var(--electric);
+        }
+
+        .wifi-network-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .wifi-network-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .wifi-signal {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 14px;
+        }
+
+        .wifi-signal-bar {
+            width: 3px;
+            background: var(--text-tertiary);
+            border-radius: 1px;
+        }
+
+        .wifi-signal-bar.active {
+            background: var(--success);
+        }
+
+        .wifi-signal-bar:nth-child(1) { height: 4px; }
+        .wifi-signal-bar:nth-child(2) { height: 7px; }
+        .wifi-signal-bar:nth-child(3) { height: 10px; }
+        .wifi-signal-bar:nth-child(4) { height: 14px; }
+
+        .wifi-network-empty {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 13px;
         }
 
         .wifi-submit {
@@ -768,7 +856,7 @@
             <div class="step-desc">Після прошивки налаштуй WiFi мережу для пристрою</div>
 
             <div class="wifi-section">
-                <button class="wifi-btn" id="wifiBtnInner" disabled>
+                <button class="wifi-btn" id="wifiBtnInner">
                     <span>📶</span>
                     <span>Налаштувати WiFi</span>
                 </button>
@@ -778,10 +866,13 @@
                         <h3>Налаштування WiFi</h3>
                         <div id="wifiForm">
                             <div class="wifi-scan-row">
-                                <select id="wifiSelect" class="wifi-input wifi-select">
-                                    <option value="">-- Оберіть мережу --</option>
-                                </select>
-                                <button id="wifiScan" class="wifi-scan-btn" title="Сканувати">🔍</button>
+                                <button id="wifiScan" class="wifi-scan-btn">
+                                    <span>🔍</span>
+                                    <span>Сканувати мережі</span>
+                                </button>
+                            </div>
+                            <div id="wifiNetworkList" class="wifi-network-list">
+                                <div class="wifi-network-empty">Натисніть "Сканувати" для пошуку мереж</div>
                             </div>
                             <input type="text" id="wifiSsid" placeholder="Або введіть SSID вручну" class="wifi-input">
                             <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
@@ -898,7 +989,7 @@
             }
 
             // Enable WiFi button only after successful flash
-            wifiBtnInner.disabled = !flashSuccess;
+            // wifiBtnInner.disabled = !flashSuccess; // TEMP: disabled for testing
         }
 
         // Bind input event
@@ -1040,7 +1131,7 @@
 
         // Custom Improv WiFi implementation
         const wifiDialog = document.getElementById('wifiDialog');
-        const wifiSelect = document.getElementById('wifiSelect');
+        const wifiNetworkList = document.getElementById('wifiNetworkList');
         const wifiSsid = document.getElementById('wifiSsid');
         const wifiPass = document.getElementById('wifiPass');
         const wifiConnectBtn = document.getElementById('wifiConnect');
@@ -1051,6 +1142,9 @@
         let improvPort = null;
         let improvReader = null;
         let improvWriter = null;
+        let improvBuffer = [];
+        let improvReading = false;
+        let improvReaderId = 0;
 
         function wifiLog(msg, type = '') {
             wifiLogEl.classList.add('visible');
@@ -1075,56 +1169,69 @@
             await improvWriter.write(packet);
         }
 
+        // Parse one packet from buffer, returns null if not enough data
+        function parsePacketFromBuffer() {
+            while (improvBuffer.length >= 10) {
+                const headerIdx = improvBuffer.findIndex((v, i) =>
+                    i <= improvBuffer.length - 6 &&
+                    improvBuffer[i] === 0x49 && improvBuffer[i+1] === 0x4D &&
+                    improvBuffer[i+2] === 0x50 && improvBuffer[i+3] === 0x52 &&
+                    improvBuffer[i+4] === 0x4F && improvBuffer[i+5] === 0x56
+                );
+
+                if (headerIdx === -1) {
+                    improvBuffer = improvBuffer.slice(-5);
+                    return null;
+                }
+
+                if (headerIdx > 0) improvBuffer = improvBuffer.slice(headerIdx);
+                if (improvBuffer.length < 10) return null;
+
+                const dataLen = improvBuffer[8];
+                const packetLen = 9 + dataLen + 1;
+
+                if (improvBuffer.length < packetLen) return null;
+
+                const packet = improvBuffer.slice(0, packetLen);
+                improvBuffer = improvBuffer.slice(packetLen);
+
+                return {
+                    type: packet[7],
+                    data: packet.slice(9, 9 + dataLen)
+                };
+            }
+            return null;
+        }
+
+        // Background read loop
+        async function startImprovReading() {
+            const myId = ++improvReaderId;
+            improvReading = true;
+
+            try {
+                while (improvReading && improvReader && improvReaderId === myId) {
+                    const { value, done } = await improvReader.read();
+                    if (done) break;
+                    if (value && value.length > 0) {
+                        improvBuffer.push(...value);
+                    }
+                }
+            } catch (e) {
+                // Reader closed or error
+            }
+            // Only set improvReading = false if we're still the active reader
+            if (improvReaderId === myId) {
+                improvReading = false;
+            }
+        }
+
         async function improvReadPacket(timeout = 5000) {
             const startTime = Date.now();
-            let buffer = [];
 
             while (Date.now() - startTime < timeout) {
-                try {
-                    const { value, done } = await Promise.race([
-                        improvReader.read(),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 100))
-                    ]);
-
-                    if (done) break;
-                    if (value) {
-                        buffer.push(...value);
-
-                        // Look for IMPROV header
-                        while (buffer.length >= 10) {
-                            const headerIdx = buffer.findIndex((v, i) =>
-                                i <= buffer.length - 6 &&
-                                buffer[i] === 0x49 && buffer[i+1] === 0x4D &&
-                                buffer[i+2] === 0x50 && buffer[i+3] === 0x52 &&
-                                buffer[i+4] === 0x4F && buffer[i+5] === 0x56
-                            );
-
-                            if (headerIdx === -1) {
-                                buffer = buffer.slice(-5);
-                                break;
-                            }
-
-                            if (headerIdx > 0) buffer = buffer.slice(headerIdx);
-
-                            if (buffer.length < 10) break;
-
-                            const dataLen = buffer[8];
-                            const packetLen = 9 + dataLen + 1; // header + type + len + data + checksum
-
-                            if (buffer.length < packetLen) break;
-
-                            const packet = buffer.slice(0, packetLen);
-                            buffer = buffer.slice(packetLen);
-
-                            return {
-                                type: packet[7],
-                                data: packet.slice(9, 9 + dataLen)
-                            };
-                        }
-                    }
-                } catch (e) {
-                    if (e.message !== 'timeout') throw e;
-                }
+                const packet = parsePacketFromBuffer();
+                if (packet) return packet;
+                await new Promise(r => setTimeout(r, 50)); // Small delay
             }
             return null;
         }
@@ -1136,11 +1243,15 @@
 
                 improvReader = improvPort.readable.getReader();
                 improvWriter = improvPort.writable.getWriter();
+                improvBuffer = [];
+
+                // Start background reading
+                startImprovReading();
 
                 wifiLog('Підключено до порту');
 
-                // Send request current state
-                await improvSend(0x03); // REQUEST_CURRENT_STATE
+                // Send request current state (RPC command 0x02, data_length 0)
+                await improvSend(0x03, [0x02, 0x00]); // GET_CURRENT_STATE
                 wifiLog('Перевірка Improv...');
 
                 const response = await improvReadPacket(3000);
@@ -1184,8 +1295,6 @@
                         continue;
                     }
 
-                    console.log('Improv response:', response.type, response.data);
-
                     if (response.type === 0x01) { // CURRENT_STATE
                         const state = response.data[0];
                         if (state === 0x03) { // PROVISIONING
@@ -1220,6 +1329,7 @@
         }
 
         async function improvDisconnect() {
+            improvReading = false;
             try {
                 if (improvReader) { improvReader.releaseLock(); improvReader = null; }
                 if (improvWriter) { improvWriter.releaseLock(); improvWriter = null; }
@@ -1231,7 +1341,7 @@
         wifiBtnInner.onclick = async () => {
             wifiLogEl.innerHTML = '';
             wifiLogEl.classList.remove('visible');
-            wifiSelect.innerHTML = '<option value="">-- Оберіть мережу --</option>';
+            wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Підключення...</div>';
             wifiSsid.value = '';
             wifiPass.value = '';
             wifiDialog.style.display = 'flex';
@@ -1239,7 +1349,6 @@
             if (await improvConnect()) {
                 // Auto-scan networks
                 await improvScanNetworks();
-                wifiPass.focus();
             }
         };
 
@@ -1335,11 +1444,24 @@
         async function improvScanNetworks() {
             wifiLog('Сканування мереж...');
             wifiScanBtn.disabled = true;
-            wifiSelect.innerHTML = '<option value="">Сканування...</option>';
+            wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Сканування...</div>';
 
             try {
-                // Send SCAN_WIFI command (RPC command 0x04)
-                await improvSend(0x03, [0x04]); // RPC with command_id = 0x04
+                // Release and recreate reader to ensure clean state
+                improvReading = false;
+                await new Promise(r => setTimeout(r, 100));
+                improvReader.releaseLock();
+                improvReader = improvPort.readable.getReader();
+                improvBuffer = [];
+
+                // Restart background reading
+                startImprovReading();
+
+                // Small delay to ensure ESP32 is ready
+                await new Promise(r => setTimeout(r, 100));
+
+                // Send SCAN_WIFI command (RPC command 0x04, data_length 0)
+                await improvSend(0x03, [0x04, 0x00]); // RPC with command_id = 0x04
 
                 // Wait for scan results - may come as multiple packets
                 const networks = [];
@@ -1347,45 +1469,52 @@
                 let gotResults = false;
 
                 while (Date.now() - startTime < 15000) {
-                    const response = await improvReadPacket(gotResults ? 500 : 5000);
+                    const response = await improvReadPacket(gotResults ? 2000 : 10000);
                     if (!response) {
-                        if (gotResults) break; // No more packets after we got some
+                        if (gotResults) break;
                         continue;
                     }
 
-                    console.log('Scan response:', response.type, response.data);
-
                     if (response.type === 0x04) { // RPC_RESULT
                         gotResults = true;
-                        // Parse network data - each result contains 3 strings: SSID, RSSI, auth_required
-                        let offset = 1; // Skip command ID
                         const data = response.data;
 
-                        while (offset < data.length) {
-                            // Read SSID
-                            if (offset >= data.length) break;
-                            const ssidLen = data[offset++];
-                            if (offset + ssidLen > data.length) break;
-                            const ssid = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + ssidLen)));
-                            offset += ssidLen;
+                        // Check for end marker (empty response or just command_id + 0 length)
+                        if (data.length <= 2 || (data.length > 1 && data[1] === 0)) {
+                            break; // End of scan results
+                        }
 
-                            // Read RSSI
-                            if (offset >= data.length) break;
-                            const rssiLen = data[offset++];
-                            if (offset + rssiLen > data.length) break;
-                            const rssi = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + rssiLen)));
-                            offset += rssiLen;
+                        // Each packet contains ONE network
+                        // Format: [command_id, total_length, ssid_len, ssid, rssi_len, rssi, auth_len, auth]
+                        let offset = 2; // Skip command ID and total_length
 
-                            // Read auth required
-                            if (offset >= data.length) break;
-                            const authLen = data[offset++];
-                            if (offset + authLen > data.length) break;
-                            const auth = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + authLen)));
-                            offset += authLen;
+                        // Read SSID
+                        if (offset >= data.length) continue;
+                        const ssidLen = data[offset++];
+                        if (offset + ssidLen > data.length) continue;
+                        const ssid = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + ssidLen)));
+                        offset += ssidLen;
 
-                            if (ssid) {
-                                networks.push({ ssid, rssi: parseInt(rssi) || 0, auth: auth === 'YES' });
-                            }
+                        // Read RSSI (sent as 1 byte, signed value)
+                        if (offset >= data.length) continue;
+                        const rssiLen = data[offset++];
+                        if (offset + rssiLen > data.length) continue;
+                        let rssi = 0;
+                        if (rssiLen === 1) {
+                            rssi = data[offset] > 127 ? data[offset] - 256 : data[offset];
+                        } else {
+                            rssi = parseInt(new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + rssiLen)))) || 0;
+                        }
+                        offset += rssiLen;
+
+                        // Read auth required
+                        if (offset >= data.length) continue;
+                        const authLen = data[offset++];
+                        if (offset + authLen > data.length) continue;
+                        const auth = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + authLen)));
+
+                        if (ssid) {
+                            networks.push({ ssid, rssi, auth: auth === 'YES' });
                         }
                     } else if (response.type === 0x05) { // ERROR_STATE
                         const errCode = response.data[0];
@@ -1404,30 +1533,51 @@
                     }
                 }
 
-                // Populate dropdown
-                wifiSelect.innerHTML = '<option value="">-- Оберіть мережу --</option>';
-                uniqueNetworks.forEach(net => {
-                    const signal = net.rssi > -50 ? '▓▓▓' : net.rssi > -70 ? '▓▓░' : '▓░░';
-                    const lock = net.auth ? '🔒' : '';
-                    const option = document.createElement('option');
-                    option.value = net.ssid;
-                    option.textContent = `${net.ssid} ${signal} ${lock}`;
-                    wifiSelect.appendChild(option);
-                });
-
+                // Populate network list
+                wifiNetworkList.innerHTML = '';
                 if (uniqueNetworks.length > 0) {
+                    uniqueNetworks.forEach(net => {
+                        // Signal bars: 4 bars based on RSSI
+                        const bars = net.rssi > -50 ? 4 : net.rssi > -60 ? 3 : net.rssi > -70 ? 2 : 1;
+                        const signalBars = [1,2,3,4].map(i =>
+                            `<div class="wifi-signal-bar ${i <= bars ? 'active' : ''}"></div>`
+                        ).join('');
+
+                        const item = document.createElement('div');
+                        item.className = 'wifi-network-item';
+                        item.dataset.ssid = net.ssid;
+                        item.innerHTML = `
+                            <span class="wifi-network-name">${net.ssid}</span>
+                            <span class="wifi-network-info">
+                                <span class="wifi-signal">${signalBars}</span>
+                                ${net.auth ? '🔒' : ''}
+                            </span>
+                        `;
+                        item.onclick = () => selectNetwork(item, net.ssid);
+                        wifiNetworkList.appendChild(item);
+                    });
                     wifiLog(`Знайдено ${uniqueNetworks.length} мереж`, 'success');
                 } else {
+                    wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Мережі не знайдено</div>';
                     wifiLog('Мережі не знайдено. Введіть SSID вручну.');
                 }
 
             } catch (e) {
                 wifiLog('Сканування недоступне. Введіть SSID вручну.', 'error');
                 console.error('Scan error:', e);
-                wifiSelect.innerHTML = '<option value="">-- Введіть вручну --</option>';
+                wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Помилка сканування</div>';
             }
 
             wifiScanBtn.disabled = false;
+        }
+
+        function selectNetwork(item, ssid) {
+            // Remove selection from all items
+            document.querySelectorAll('.wifi-network-item').forEach(el => el.classList.remove('selected'));
+            // Select this item
+            item.classList.add('selected');
+            wifiSsid.value = ssid;
+            wifiPass.focus();
         }
 
         // Scan button click
@@ -1437,15 +1587,6 @@
                 return;
             }
             await improvScanNetworks();
-        };
-
-        // Select network from dropdown
-        wifiSelect.onchange = () => {
-            const selected = wifiSelect.value;
-            if (selected) {
-                wifiSsid.value = selected;
-                wifiPass.focus();
-            }
         };
 
         // Cleanup on page unload
