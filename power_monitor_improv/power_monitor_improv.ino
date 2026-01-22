@@ -82,8 +82,6 @@ bool customConnectWiFi(const char* ssid, const char* password) {
     return false;
 }
 
-bool needsImprov = false;
-
 void setup() {
     // Critical: delay before anything to let esptool sync with bootloader
     // Without this, re-flashing via browser fails
@@ -125,32 +123,39 @@ void setup() {
     Serial.printf("Device Name: %s\n", deviceName.c_str());
     Serial.printf("Server IP: %s\n", serverIp.c_str());
 
-    if (configured && savedSsid.length() > 0) {
-        // WiFi configured - connect directly
-        Serial.printf("Saved WiFi: %s\n", savedSsid.c_str());
-        customConnectWiFi(savedSsid.c_str(), savedPass.c_str());
-    } else {
-        // No WiFi - enable Improv configuration
-        needsImprov = true;
-        Serial.println("No WiFi configured - use Improv to setup");
+    // Setup Improv (always available for reconfiguration)
+    String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
+    improvSerial.setDeviceInfo(
+        ImprovTypes::ChipFamily::CF_ESP32,
+        deviceName.c_str(),
+        "1.0.0",
+        "Power Monitor",
+        dashboardUrl.c_str()
+    );
+    improvSerial.onImprovError(onImprovError);
+    improvSerial.onImprovConnected(onImprovConnected);
+    improvSerial.setCustomConnectWiFi(customConnectWiFi);
 
-        String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
-        improvSerial.setDeviceInfo(
-            ImprovTypes::ChipFamily::CF_ESP32,
-            deviceName.c_str(),
-            "1.0.0",
-            "Power Monitor",
-            dashboardUrl.c_str()
-        );
-        improvSerial.onImprovError(onImprovError);
-        improvSerial.onImprovConnected(onImprovConnected);
-        improvSerial.setCustomConnectWiFi(customConnectWiFi);
+    if (configured && savedSsid.length() > 0) {
+        // Try saved WiFi
+        Serial.printf("Saved WiFi: %s\n", savedSsid.c_str());
+        if (customConnectWiFi(savedSsid.c_str(), savedPass.c_str())) {
+            Serial.println("WiFi connected!");
+        } else {
+            // Connection failed - clear saved credentials
+            Serial.println("Saved WiFi failed - clearing credentials");
+            prefs.begin("power-mon", false);
+            prefs.putBool("configured", false);
+            prefs.end();
+        }
+    } else {
+        Serial.println("No WiFi configured - use Improv to setup");
     }
 }
 
 void loop() {
-    // Handle Improv only if WiFi not configured
-    if (needsImprov) {
+    // Handle Improv when not connected (allows reconfiguration)
+    if (WiFi.status() != WL_CONNECTED) {
         improvSerial.handleSerial();
     }
 

@@ -1217,9 +1217,8 @@
                     }
                 }
             } catch (e) {
-                // Reader closed or error
+                // Reader closed or replaced
             }
-            // Only set improvReading = false if we're still the active reader
             if (improvReaderId === myId) {
                 improvReading = false;
             }
@@ -1407,7 +1406,7 @@
                 // Restart background reading
                 startImprovReading();
 
-                // Small delay to ensure ESP32 is ready
+                // Wait for reader to be ready
                 await new Promise(r => setTimeout(r, 100));
 
                 // Send SCAN_WIFI command (RPC command 0x04, data_length 0)
@@ -1466,7 +1465,7 @@
                         if (ssid) {
                             networks.push({ ssid, rssi, auth: auth === 'YES' });
                         }
-                    } else if (response.type === 0x05) { // ERROR_STATE
+                    } else if (response.type === 0x02) { // ERROR_STATE
                         const errCode = response.data[0];
                         throw new Error(`Scan error: ${errCode}`);
                     }
