@@ -159,10 +159,8 @@ void setup() {
 }
 
 void loop() {
-    // Handle Improv when not connected (allows reconfiguration)
-    if (WiFi.status() != WL_CONNECTED) {
-        improvSerial.handleSerial();
-    }
+    // Always handle Improv (allows reconfiguration even when connected)
+    improvSerial.handleSerial();
 
     // If connected, do monitoring
     if (WiFi.status() == WL_CONNECTED) {
