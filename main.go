@@ -744,6 +744,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	// state.LastPing loaded from DB
 	wasDown := state.IsDown
 	downTime := state.DownSince
+	state.LastPing = time.Now()
 	state.IsDown = false
 	if wasDown { state.UpSince = time.Now() }
 	mu.Unlock()
