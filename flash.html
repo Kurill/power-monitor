@@ -1279,18 +1279,13 @@
 
                 await improvSend(0x03, data); // RPC command
 
-                // Wait for response - ESP32 sends multiple packets
-                let gotProvisioning = false;
+                // Wait for response - ESP32 tries to connect for ~10 seconds
                 const startTime = Date.now();
 
                 while (Date.now() - startTime < 20000) {
-                    const response = await improvReadPacket(2000);
+                    // Long timeout - ESP32 needs time to try connecting
+                    const response = await improvReadPacket(12000);
                     if (!response) {
-                        // If we got PROVISIONING state and no more responses, assume success
-                        if (gotProvisioning) {
-                            wifiLog('WiFi налаштовано!', 'success');
-                            return true;
-                        }
                         continue;
                     }
 
@@ -1298,12 +1293,14 @@
                         const state = response.data[0];
                         if (state === 0x03) { // PROVISIONING
                             wifiLog('Підключення...');
-                            gotProvisioning = true;
                         } else if (state === 0x04) { // PROVISIONED
                             wifiLog('WiFi налаштовано!', 'success');
                             return true;
+                        } else if (state === 0x00) { // STOPPED - connection failed
+                            // Wait for ERROR_STATE with details
+                            continue;
                         }
-                    } else if (response.type === 0x04) { // RPC_RESULT - success
+                    } else if (response.type === 0x04) { // RPC_RESULT - success with URL
                         wifiLog('WiFi налаштовано!', 'success');
                         return true;
                     } else if (response.type === 0x02) { // ERROR_STATE
@@ -1311,12 +1308,6 @@
                         const errors = ['', 'Invalid RPC', 'Unknown RPC', 'Невірний пароль або мережа недоступна', 'Not authorized'];
                         throw new Error(errors[errCode] || `Error ${errCode}`);
                     }
-                }
-
-                // If we got provisioning state, consider it success
-                if (gotProvisioning) {
-                    wifiLog('WiFi налаштовано!', 'success');
-                    return true;
                 }
 
                 throw new Error('Таймаут підключення');
