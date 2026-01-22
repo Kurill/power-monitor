@@ -829,25 +829,29 @@
                     binaryString += String.fromCharCode(fwData[i]);
                 }
 
-                // 6. Erase entire flash (including NVS with saved WiFi)
-                setProgress(15, "Стирання flash...");
-                flashBtnText.textContent = "Стирання...";
-                log("Стирання flash (включно з налаштуваннями)...");
-                await esploader.eraseFlash();
-                log("Flash стерто", "success");
-
-                // 7. Flash
-                setProgress(25, "Прошивка...");
+                // 6. Flash firmware + erase NVS to clear saved WiFi
+                setProgress(20, "Прошивка...");
                 flashBtnText.textContent = "Прошивка...";
                 log("Прошивка...");
                 const startTime = Date.now();
 
+                // Create empty NVS data (0xFF bytes) to clear saved WiFi credentials
+                // NVS partition is at 0x9000, size 0x5000 (20KB)
+                const nvsSize = 0x5000;
+                let nvsEmpty = '';
+                for (let i = 0; i < nvsSize; i++) {
+                    nvsEmpty += String.fromCharCode(0xFF);
+                }
+
                 await esploader.writeFlash({
-                    fileArray: [{ data: binaryString, address: 0 }],
+                    fileArray: [
+                        { data: binaryString, address: 0 },
+                        { data: nvsEmpty, address: 0x9000 }
+                    ],
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
-                    eraseAll: false,
+                    eraseAll: true,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const pct = Math.round(20 + (written / total * 75));
@@ -858,7 +862,7 @@
                 const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
                 log("Прошивка завершена за " + totalTime + " сек!", "success");
 
-                // 8. Hard reset
+                // 7. Hard reset
                 setProgress(98, "Перезавантаження...");
                 log("Hard reset...");
                 await transport.setDTR(false);
@@ -866,7 +870,7 @@
                 await new Promise(r => setTimeout(r, 100));
                 await transport.setRTS(false);
 
-                // 9. Disconnect and release port completely
+                // 8. Disconnect and release port completely
                 await transport.disconnect();
                 try { await device.close(); } catch(e) {}
                 cleanUp();
