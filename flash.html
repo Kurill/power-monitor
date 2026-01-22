@@ -576,6 +576,38 @@
             border-color: var(--electric);
         }
 
+        .wifi-scan-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .wifi-select {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .wifi-scan-btn {
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wifi-scan-btn:hover {
+            border-color: var(--electric);
+            background: var(--electric-subtle);
+        }
+
+        .wifi-scan-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .wifi-submit {
             width: 100%;
             padding: 14px;
@@ -736,7 +768,7 @@
             <div class="step-desc">Після прошивки налаштуй WiFi мережу для пристрою</div>
 
             <div class="wifi-section">
-                <button class="wifi-btn" id="wifiBtnInner">
+                <button class="wifi-btn" id="wifiBtnInner" disabled>
                     <span>📶</span>
                     <span>Налаштувати WiFi</span>
                 </button>
@@ -745,7 +777,13 @@
                     <div class="wifi-dialog-content">
                         <h3>Налаштування WiFi</h3>
                         <div id="wifiForm">
-                            <input type="text" id="wifiSsid" placeholder="Назва мережі (SSID)" class="wifi-input">
+                            <div class="wifi-scan-row">
+                                <select id="wifiSelect" class="wifi-input wifi-select">
+                                    <option value="">-- Оберіть мережу --</option>
+                                </select>
+                                <button id="wifiScan" class="wifi-scan-btn" title="Сканувати">🔍</button>
+                            </div>
+                            <input type="text" id="wifiSsid" placeholder="Або введіть SSID вручну" class="wifi-input">
                             <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
                             <button id="wifiConnect" class="wifi-submit">Підключити</button>
                         </div>
@@ -798,9 +836,10 @@
         }
 
         // Get owner email (cached)
-        fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+        fetch('/api/me', { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(data => {
             cachedOwnerEmail = data?.email || null;
-        }).catch(() => {});
+            console.log('Logged in as:', cachedOwnerEmail || 'not logged in');
+        }).catch(e => console.error('Auth check failed:', e));
 
         // Generate device ID from name
         function generateId(name) {
@@ -918,11 +957,8 @@
                 const fwData = new Uint8Array(await resp.arrayBuffer());
                 log("Завантажено " + fwData.length + " байт", "success");
 
-                // Convert to binary string (esptool-js format)
-                let binaryString = '';
-                for (let i = 0; i < fwData.length; i++) {
-                    binaryString += String.fromCharCode(fwData[i]);
-                }
+                // Convert to binary string using latin1 (ISO-8859-1) - 1:1 byte mapping
+                const binaryString = new TextDecoder('iso-8859-1').decode(fwData);
 
                 // 6. Flash firmware
                 setProgress(20, "Прошивка...");
@@ -1007,10 +1043,12 @@
 
         // Custom Improv WiFi implementation
         const wifiDialog = document.getElementById('wifiDialog');
+        const wifiSelect = document.getElementById('wifiSelect');
         const wifiSsid = document.getElementById('wifiSsid');
         const wifiPass = document.getElementById('wifiPass');
         const wifiConnectBtn = document.getElementById('wifiConnect');
         const wifiCloseBtn = document.getElementById('wifiClose');
+        const wifiScanBtn = document.getElementById('wifiScan');
         const wifiLogEl = document.getElementById('wifiLog');
 
         let improvPort = null;
@@ -1196,10 +1234,15 @@
         wifiBtnInner.onclick = async () => {
             wifiLogEl.innerHTML = '';
             wifiLogEl.classList.remove('visible');
+            wifiSelect.innerHTML = '<option value="">-- Оберіть мережу --</option>';
+            wifiSsid.value = '';
+            wifiPass.value = '';
             wifiDialog.style.display = 'flex';
 
             if (await improvConnect()) {
-                wifiSsid.focus();
+                // Auto-scan networks
+                await improvScanNetworks();
+                wifiPass.focus();
             }
         };
 
@@ -1216,7 +1259,38 @@
             wifiConnectBtn.disabled = true;
 
             if (await improvSendWifi(ssid, pass)) {
-                wifiStatus.textContent = "WiFi налаштовано! Пристрій підключено до мережі.";
+                wifiLog('WiFi налаштовано! Чекаємо перший пінг...', 'success');
+
+                // Wait for device to ping server (up to 60 seconds)
+                let deviceOnline = false;
+                const pingStart = Date.now();
+                while (Date.now() - pingStart < 60000) {
+                    try {
+                        const resp = await fetch(`${SERVER}/api/status`);
+                        const data = await resp.json();
+                        if (data[currentDeviceId] && data[currentDeviceId].last_ping) {
+                            const lastPing = new Date(data[currentDeviceId].last_ping);
+                            // Check if ping is recent (within last 2 minutes)
+                            if (Date.now() - lastPing.getTime() < 120000) {
+                                deviceOnline = true;
+                                wifiLog('Пристрій онлайн!', 'success');
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Status check error:', e);
+                    }
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+
+                if (!deviceOnline) {
+                    wifiLog('Пристрій не відповідає серверу. Перевірте підключення.', 'error');
+                }
+
+                // Update UI
+                wifiStatus.textContent = deviceOnline
+                    ? "WiFi налаштовано! Пристрій онлайн."
+                    : "WiFi налаштовано, але пристрій не відповідає серверу.";
                 wifiStatus.classList.add('visible');
                 document.getElementById('step3num').textContent = '✓';
                 document.getElementById('step3num').classList.add('done');
@@ -1225,17 +1299,30 @@
 
                 // Auto-claim device
                 if (cachedOwnerEmail) {
-                    fetch(`${SERVER}/api/claim`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_id: currentDeviceId })
-                    }).catch(() => {});
+                    wifiLog(`Прив'язка до ${cachedOwnerEmail}...`);
+                    try {
+                        const claimResp = await fetch(`${SERVER}/api/claim`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ device_id: currentDeviceId })
+                        });
+                        if (claimResp.ok) {
+                            wifiLog('Пристрій прив\'язано!', 'success');
+                        } else {
+                            wifiLog(`Помилка прив'язки: ${claimResp.status}`, 'error');
+                        }
+                    } catch (e) {
+                        wifiLog(`Помилка прив'язки: ${e.message}`, 'error');
+                    }
+                } else {
+                    wifiLog('Увійдіть щоб прив\'язати пристрій до акаунту');
                 }
 
                 setTimeout(() => {
                     wifiDialog.style.display = 'none';
                     improvDisconnect();
-                }, 2000);
+                }, 3000);
             }
 
             wifiConnectBtn.disabled = false;
@@ -1245,6 +1332,123 @@
         wifiCloseBtn.onclick = async () => {
             wifiDialog.style.display = 'none';
             await improvDisconnect();
+        };
+
+        // WiFi scan - RPC command 0x04
+        async function improvScanNetworks() {
+            wifiLog('Сканування мереж...');
+            wifiScanBtn.disabled = true;
+            wifiSelect.innerHTML = '<option value="">Сканування...</option>';
+
+            try {
+                // Send SCAN_WIFI command (RPC command 0x04)
+                await improvSend(0x03, [0x04]); // RPC with command_id = 0x04
+
+                // Wait for scan results - may come as multiple packets
+                const networks = [];
+                const startTime = Date.now();
+                let gotResults = false;
+
+                while (Date.now() - startTime < 15000) {
+                    const response = await improvReadPacket(gotResults ? 500 : 5000);
+                    if (!response) {
+                        if (gotResults) break; // No more packets after we got some
+                        continue;
+                    }
+
+                    console.log('Scan response:', response.type, response.data);
+
+                    if (response.type === 0x04) { // RPC_RESULT
+                        gotResults = true;
+                        // Parse network data - each result contains 3 strings: SSID, RSSI, auth_required
+                        let offset = 1; // Skip command ID
+                        const data = response.data;
+
+                        while (offset < data.length) {
+                            // Read SSID
+                            if (offset >= data.length) break;
+                            const ssidLen = data[offset++];
+                            if (offset + ssidLen > data.length) break;
+                            const ssid = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + ssidLen)));
+                            offset += ssidLen;
+
+                            // Read RSSI
+                            if (offset >= data.length) break;
+                            const rssiLen = data[offset++];
+                            if (offset + rssiLen > data.length) break;
+                            const rssi = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + rssiLen)));
+                            offset += rssiLen;
+
+                            // Read auth required
+                            if (offset >= data.length) break;
+                            const authLen = data[offset++];
+                            if (offset + authLen > data.length) break;
+                            const auth = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + authLen)));
+                            offset += authLen;
+
+                            if (ssid) {
+                                networks.push({ ssid, rssi: parseInt(rssi) || 0, auth: auth === 'YES' });
+                            }
+                        }
+                    } else if (response.type === 0x05) { // ERROR_STATE
+                        const errCode = response.data[0];
+                        throw new Error(`Scan error: ${errCode}`);
+                    }
+                }
+
+                // Remove duplicates (by SSID), keep strongest signal
+                const uniqueNetworks = [];
+                const seen = new Set();
+                networks.sort((a, b) => b.rssi - a.rssi);
+                for (const net of networks) {
+                    if (!seen.has(net.ssid)) {
+                        seen.add(net.ssid);
+                        uniqueNetworks.push(net);
+                    }
+                }
+
+                // Populate dropdown
+                wifiSelect.innerHTML = '<option value="">-- Оберіть мережу --</option>';
+                uniqueNetworks.forEach(net => {
+                    const signal = net.rssi > -50 ? '▓▓▓' : net.rssi > -70 ? '▓▓░' : '▓░░';
+                    const lock = net.auth ? '🔒' : '';
+                    const option = document.createElement('option');
+                    option.value = net.ssid;
+                    option.textContent = `${net.ssid} ${signal} ${lock}`;
+                    wifiSelect.appendChild(option);
+                });
+
+                if (uniqueNetworks.length > 0) {
+                    wifiLog(`Знайдено ${uniqueNetworks.length} мереж`, 'success');
+                } else {
+                    wifiLog('Мережі не знайдено. Введіть SSID вручну.');
+                }
+
+            } catch (e) {
+                wifiLog('Сканування недоступне. Введіть SSID вручну.', 'error');
+                console.error('Scan error:', e);
+                wifiSelect.innerHTML = '<option value="">-- Введіть вручну --</option>';
+            }
+
+            wifiScanBtn.disabled = false;
+        }
+
+        // Scan button click
+        wifiScanBtn.onclick = async () => {
+            if (!improvPort) {
+                wifiLog('Спочатку підключіться до порту', 'error');
+                return;
+            }
+            await improvScanNetworks();
+        };
+
+        // Select network from dropdown
+        wifiSelect.onchange = () => {
+            const selected = wifiSelect.value;
+            if (selected) {
+                wifiSsid.value = selected;
+                wifiPass.focus();
+            }
         };
 
         // Cleanup on page unload

@@ -117,6 +117,12 @@ Improv WiFi Serial SDK (`improv-wifi-serial-sdk`) не работает посл
 
 **Важно:** Type `0x01` (WIFI_SETTINGS) — НЕ работает. Нужен именно RPC.
 
+#### WiFi scan — RPC команда
+- **Type:** `0x03` (RPC Command)
+- **Data:** `[command_id=0x04]`
+- **Response:** `RPC_RESULT (0x04)` с данными: `[cmd_id, ssid_len, ssid, rssi_len, rssi, auth_len, auth]...`
+- `auth` = "YES" или "NO"
+
 ### Прошивка через браузер
 - `eraseAll: false` — только перезаписываем нужные секторы
 - `eraseAll: true` и `eraseFlash()` — ломают ESP32 (стирают bootloader)

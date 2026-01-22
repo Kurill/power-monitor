@@ -115,17 +115,23 @@ void setup() {
     String savedPass = prefs.getString("pass", "");
     prefs.end();
 
+    // Always enable Serial for debugging
+    Serial.begin(115200);
+    Serial.setRxBufferSize(256);
+    delay(100);
+
+    Serial.println("\n=== Power Monitor ===");
+    Serial.printf("Device ID: %s\n", deviceId.c_str());
+    Serial.printf("Device Name: %s\n", deviceName.c_str());
+    Serial.printf("Server IP: %s\n", serverIp.c_str());
+
     if (configured && savedSsid.length() > 0) {
-        // WiFi configured - connect directly, no Serial needed
+        // WiFi configured - connect directly
+        Serial.printf("Saved WiFi: %s\n", savedSsid.c_str());
         customConnectWiFi(savedSsid.c_str(), savedPass.c_str());
     } else {
-        // No WiFi - enable Serial for Improv configuration
+        // No WiFi - enable Improv configuration
         needsImprov = true;
-        Serial.begin(115200);
-        Serial.setRxBufferSize(256);
-
-        Serial.println("\n=== Power Monitor ===");
-        Serial.printf("Device: %s\n", deviceId.c_str());
         Serial.println("No WiFi configured - use Improv to setup");
 
         String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
@@ -156,12 +162,21 @@ void loop() {
             lastPing = now;
 
             String url = "http://" + serverIp + ":8090/ping?device=" + deviceId;
+            Serial.printf("Ping: %s\n", url.c_str());
 
             HTTPClient http;
             http.begin(url);
             http.setTimeout(10000);
-            http.GET();
+            int httpCode = http.GET();
+            Serial.printf("HTTP response: %d\n", httpCode);
             http.end();
+        }
+    } else {
+        // Debug WiFi status
+        static unsigned long lastWifiCheck = 0;
+        if (millis() - lastWifiCheck > 5000) {
+            lastWifiCheck = millis();
+            Serial.printf("WiFi status: %d\n", WiFi.status());
         }
     }
 
