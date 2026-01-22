@@ -1056,10 +1056,8 @@
                 await new Promise(r => setTimeout(r, 100));
                 await transport.setRTS(false);
 
-                // 8. Disconnect and release port completely
+                // 8. Disconnect transport but keep port
                 await transport.disconnect();
-                try { await device.close(); } catch(e) {}
-                try { await device.forget(); } catch(e) {} // Reset browser's port state
                 cleanUp();
 
                 // Success - but wait for ESP32 to boot before enabling WiFi
@@ -1072,11 +1070,11 @@
                 log("Отримуємо ID пристрою...");
                 flashSuccess = true;
 
-                // Get real device ID from ESP32 via Improv
+                // Get real device ID from ESP32 via Improv (reuse flashing port)
                 let realDeviceId = null;
                 try {
-                    // Open port for Improv
-                    improvPort = await navigator.serial.requestPort({});
+                    // Reopen the same port for Improv
+                    improvPort = device;
                     await improvPort.open({ baudRate: 115200 });
                     improvReader = improvPort.readable.getReader();
                     improvWriter = improvPort.writable.getWriter();
