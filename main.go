@@ -1079,14 +1079,21 @@ func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "device required", 400)
 		return
 	}
+	deviceName := r.URL.Query().Get("name")
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	d, exists := devices[deviceID]
 	if !exists {
-		http.Error(w, "device not found", 404)
-		return
+		// Create new device if it doesn't exist yet
+		d = &DeviceConfig{
+			ID:   deviceID,
+			Name: deviceName,
+		}
+		devices[deviceID] = d
+		states[deviceID] = &DeviceState{}
+		log.Printf("Device %s created during claim", deviceID)
 	}
 
 	// Only claim if no owner yet
@@ -1096,6 +1103,9 @@ func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.OwnerEmail = email
+	if deviceName != "" && d.Name == "" {
+		d.Name = deviceName
+	}
 	saveDevice(d)
 	log.Printf("Device %s claimed by %s", deviceID, email)
 

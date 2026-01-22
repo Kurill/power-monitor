@@ -1279,6 +1279,35 @@
                             continue;
                         }
                     } else if (response.type === 0x04) { // RPC_RESULT - success with URL
+                        // Parse URL from response: [cmd_id, total_len, url_len, url_bytes...]
+                        const data = response.data;
+                        if (data.length > 3) {
+                            const urlLen = data[2];
+                            const urlBytes = data.slice(3, 3 + urlLen);
+                            const url = new TextDecoder().decode(new Uint8Array(urlBytes));
+                            console.log('Device URL:', url);
+
+                            // Extract claim param and call API
+                            const match = url.match(/[?&]claim=([^&]+)/);
+                            if (match) {
+                                const claimId = match[1];
+                                const name = deviceNameInput.value.trim();
+                                try {
+                                    const claimUrl = '/api/claim?device=' + encodeURIComponent(claimId) +
+                                        (name ? '&name=' + encodeURIComponent(name) : '');
+                                    const res = await fetch(claimUrl);
+                                    if (res.ok) {
+                                        wifiLog('Пристрій додано до профілю!', 'success');
+                                    } else if (res.status === 401) {
+                                        wifiLog('Увійдіть в акаунт щоб додати пристрій', 'error');
+                                    } else {
+                                        console.log('Claim response:', res.status);
+                                    }
+                                } catch (e) {
+                                    console.error('Claim error:', e);
+                                }
+                            }
+                        }
                         wifiLog('WiFi налаштовано!', 'success');
                         return true;
                     } else if (response.type === 0x02) { // ERROR_STATE
