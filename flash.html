@@ -1073,6 +1073,22 @@
                 flashSuccess = true;
                 wifiBtnInner.disabled = false;
 
+                // Save device to user profile
+                try {
+                    const claimUrl = '/api/claim?device=' + encodeURIComponent(currentDeviceId) +
+                        '&name=' + encodeURIComponent(name);
+                    const claimRes = await fetch(claimUrl);
+                    if (claimRes.ok) {
+                        log("Пристрій додано до профілю!", "success");
+                    } else if (claimRes.status === 401) {
+                        log("Увійдіть в акаунт щоб зберегти пристрій", "error");
+                    } else {
+                        console.log('Claim failed:', claimRes.status);
+                    }
+                } catch (e) {
+                    console.error('Claim error:', e);
+                }
+
                 // Highlight WiFi button and scroll to it
                 document.getElementById('step3').classList.add('active');
                 wifiBtnInner.classList.add('pulse-attention');
