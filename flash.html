@@ -1365,70 +1365,20 @@
             wifiConnectBtn.disabled = true;
 
             if (await improvSendWifi(ssid, pass)) {
-                wifiLog('WiFi налаштовано! Чекаємо перший пінг...', 'success');
-
-                // Wait for device to ping server (up to 60 seconds)
-                let deviceOnline = false;
-                const pingStart = Date.now();
-                while (Date.now() - pingStart < 60000) {
-                    try {
-                        const resp = await fetch(`${SERVER}/api/status`);
-                        const data = await resp.json();
-                        if (data[currentDeviceId] && data[currentDeviceId].last_ping) {
-                            const lastPing = new Date(data[currentDeviceId].last_ping);
-                            // Check if ping is recent (within last 2 minutes)
-                            if (Date.now() - lastPing.getTime() < 120000) {
-                                deviceOnline = true;
-                                wifiLog('Пристрій онлайн!', 'success');
-                                break;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Status check error:', e);
-                    }
-                    await new Promise(r => setTimeout(r, 3000));
-                }
-
-                if (!deviceOnline) {
-                    wifiLog('Пристрій не відповідає серверу. Перевірте підключення.', 'error');
-                }
+                wifiLog('WiFi налаштовано! Пристрій почне пінгувати сервер.', 'success');
 
                 // Update UI
-                wifiStatus.textContent = deviceOnline
-                    ? "WiFi налаштовано! Пристрій онлайн."
-                    : "WiFi налаштовано, але пристрій не відповідає серверу.";
+                wifiStatus.textContent = 'WiFi налаштовано!';
                 wifiStatus.classList.add('visible');
                 document.getElementById('step3num').textContent = '✓';
                 document.getElementById('step3num').classList.add('done');
                 document.getElementById('step3').classList.remove('active');
                 document.getElementById('step3').classList.add('completed');
 
-                // Auto-claim device
-                if (cachedOwnerEmail) {
-                    wifiLog(`Прив'язка до ${cachedOwnerEmail}...`);
-                    try {
-                        const claimResp = await fetch(`${SERVER}/api/claim`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ device_id: currentDeviceId })
-                        });
-                        if (claimResp.ok) {
-                            wifiLog('Пристрій прив\'язано!', 'success');
-                        } else {
-                            wifiLog(`Помилка прив'язки: ${claimResp.status}`, 'error');
-                        }
-                    } catch (e) {
-                        wifiLog(`Помилка прив'язки: ${e.message}`, 'error');
-                    }
-                } else {
-                    wifiLog('Увійдіть щоб прив\'язати пристрій до акаунту');
-                }
-
                 setTimeout(() => {
                     wifiDialog.style.display = 'none';
                     improvDisconnect();
-                }, 3000);
+                }, 2000);
             }
 
             wifiConnectBtn.disabled = false;
