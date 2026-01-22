@@ -1069,25 +1069,90 @@
                 // Wait for ESP32 to boot (3s delay in firmware + boot time)
                 await new Promise(r => setTimeout(r, 5000));
 
-                log("Готово! Натисни кнопку нижче для налаштування WiFi.", "success");
+                log("Отримуємо ID пристрою...");
                 flashSuccess = true;
-                wifiBtnInner.disabled = false;
+
+                // Get real device ID from ESP32 via Improv
+                let realDeviceId = null;
+                try {
+                    // Open port for Improv
+                    improvPort = await navigator.serial.requestPort({});
+                    await improvPort.open({ baudRate: 115200 });
+                    improvReader = improvPort.readable.getReader();
+                    improvWriter = improvPort.writable.getWriter();
+                    improvBuffer = [];
+
+                    // Start background reading
+                    improvReading = true;
+                    improvReaderId++;
+                    const myReaderId = improvReaderId;
+                    (async () => {
+                        while (improvReading && improvReaderId === myReaderId) {
+                            try {
+                                const { value, done } = await improvReader.read();
+                                if (done || improvReaderId !== myReaderId) break;
+                                if (value) improvBuffer.push(...value);
+                            } catch (e) { break; }
+                        }
+                    })();
+
+                    await new Promise(r => setTimeout(r, 500));
+
+                    // Send GET_DEVICE_INFO (RPC command 0x03)
+                    await improvSend(0x03, [0x03, 0x00]);
+
+                    // Wait for response
+                    const response = await improvReadPacket(3000);
+                    if (response && response.type === 0x04) {
+                        // Parse: [cmd_id, total_len, str1_len, str1..., str2_len, str2..., ...]
+                        // str4 is deviceName which now contains device ID
+                        const data = response.data;
+                        let pos = 2; // skip cmd_id and total_len
+                        const strings = [];
+                        while (pos < data.length && strings.length < 4) {
+                            const len = data[pos];
+                            if (pos + 1 + len > data.length) break;
+                            strings.push(new TextDecoder().decode(new Uint8Array(data.slice(pos + 1, pos + 1 + len))));
+                            pos += 1 + len;
+                        }
+                        if (strings.length >= 4) {
+                            realDeviceId = strings[3]; // deviceName = device ID
+                            log("ID пристрою: " + realDeviceId, "success");
+                        }
+                    }
+
+                    // Close Improv connection (will reopen for WiFi)
+                    improvReading = false;
+                    try { improvReader.releaseLock(); } catch(e) {}
+                    try { improvWriter.releaseLock(); } catch(e) {}
+                    try { await improvPort.close(); } catch(e) {}
+                    improvPort = null;
+                    improvReader = null;
+                    improvWriter = null;
+                } catch (e) {
+                    console.error('Get device ID error:', e);
+                }
 
                 // Save device to user profile
-                try {
-                    const claimUrl = '/api/claim?device=' + encodeURIComponent(currentDeviceId) +
-                        '&name=' + encodeURIComponent(name);
-                    const claimRes = await fetch(claimUrl);
-                    if (claimRes.ok) {
-                        log("Пристрій додано до профілю!", "success");
-                    } else if (claimRes.status === 401) {
-                        log("Увійдіть в акаунт щоб зберегти пристрій", "error");
-                    } else {
-                        console.log('Claim failed:', claimRes.status);
+                if (realDeviceId) {
+                    try {
+                        const claimUrl = '/api/claim?device=' + encodeURIComponent(realDeviceId) +
+                            '&name=' + encodeURIComponent(name);
+                        const claimRes = await fetch(claimUrl);
+                        if (claimRes.ok) {
+                            log("Пристрій додано до профілю!", "success");
+                        } else if (claimRes.status === 401) {
+                            log("Увійдіть в акаунт щоб зберегти пристрій", "error");
+                        } else {
+                            console.log('Claim failed:', claimRes.status);
+                        }
+                    } catch (e) {
+                        console.error('Claim error:', e);
                     }
-                } catch (e) {
-                    console.error('Claim error:', e);
                 }
+
+                log("Готово! Натисни кнопку нижче для налаштування WiFi.", "success");
+                wifiBtnInner.disabled = false;
 
                 // Highlight WiFi button and scroll to it
                 document.getElementById('step3').classList.add('active');

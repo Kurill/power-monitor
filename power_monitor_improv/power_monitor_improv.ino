@@ -134,9 +134,9 @@ void setup() {
     String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
     improvSerial.setDeviceInfo(
         ImprovTypes::ChipFamily::CF_ESP32,
-        deviceName.c_str(),
-        "1.0.0",
         "Power Monitor",
+        "1.0.0",
+        deviceId.c_str(),  // Device ID from MAC address - readable via GET_DEVICE_INFO
         dashboardUrl.c_str()
     );
     improvSerial.onImprovError(onImprovError);
