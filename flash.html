@@ -1307,9 +1307,9 @@
                     } else if (response.type === 0x04) { // RPC_RESULT - success
                         wifiLog('WiFi налаштовано!', 'success');
                         return true;
-                    } else if (response.type === 0x05) { // ERROR_STATE
+                    } else if (response.type === 0x02) { // ERROR_STATE
                         const errCode = response.data[0];
-                        const errors = ['', 'Invalid RPC', 'Unknown RPC', 'Unable to connect', 'Not authorized'];
+                        const errors = ['', 'Invalid RPC', 'Unknown RPC', 'Невірний пароль або мережа недоступна', 'Not authorized'];
                         throw new Error(errors[errCode] || `Error ${errCode}`);
                     }
                 }
