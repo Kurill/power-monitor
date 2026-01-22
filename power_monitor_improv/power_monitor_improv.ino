@@ -49,19 +49,21 @@ void onImprovError(ImprovTypes::Error err) {
 
 // Called when WiFi connected via Improv
 void onImprovConnected(const char* ssid, const char* password) {
-    Serial.printf("WiFi configured: %s\n", ssid);
+    Serial.printf("WiFi connected: %s\n", ssid);
+    // Credentials already saved in customConnectWiFi
+}
 
-    // Save credentials
+// Custom WiFi connect function
+bool customConnectWiFi(const char* ssid, const char* password) {
+    Serial.printf("Saving and connecting to %s...\n", ssid);
+
+    // Save credentials FIRST (before trying to connect)
     prefs.begin("power-mon", false);
     prefs.putString("ssid", ssid);
     prefs.putString("pass", password);
     prefs.putBool("configured", true);
     prefs.end();
-}
-
-// Custom WiFi connect function
-bool customConnectWiFi(const char* ssid, const char* password) {
-    Serial.printf("Connecting to %s...\n", ssid);
+    Serial.println("Credentials saved");
 
     // Ensure clean state before connecting
     WiFi.disconnect(true);

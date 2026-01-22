@@ -664,22 +664,35 @@
             font-size: 13px;
         }
 
-        .wifi-submit {
-            width: 100%;
+        .wifi-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .wifi-btn {
+            flex: 1;
             padding: 14px;
             border: none;
             border-radius: 8px;
-            background: var(--success);
             color: white;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            margin-bottom: 12px;
         }
 
-        .wifi-submit:disabled {
+        .wifi-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .wifi-btn-save {
+            background: var(--electric);
+            color: var(--bg-void);
+        }
+
+        .wifi-btn-test {
+            background: var(--success);
         }
 
         .wifi-log {
@@ -838,7 +851,10 @@
                             </div>
                             <input type="text" id="wifiSsid" placeholder="Або введіть SSID вручну" class="wifi-input">
                             <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
-                            <button id="wifiConnect" class="wifi-submit">Підключити</button>
+                            <div class="wifi-buttons">
+                                <button id="wifiSave" class="wifi-btn wifi-btn-save">Зберегти</button>
+                                <button id="wifiTest" class="wifi-btn wifi-btn-test">Перевірити</button>
+                            </div>
                         </div>
                         <div id="wifiLog" class="wifi-log"></div>
                         <button id="wifiClose" class="wifi-close">Закрити</button>
@@ -1096,7 +1112,8 @@
         const wifiNetworkList = document.getElementById('wifiNetworkList');
         const wifiSsid = document.getElementById('wifiSsid');
         const wifiPass = document.getElementById('wifiPass');
-        const wifiConnectBtn = document.getElementById('wifiConnect');
+        const wifiSaveBtn = document.getElementById('wifiSave');
+        const wifiTestBtn = document.getElementById('wifiTest');
         const wifiCloseBtn = document.getElementById('wifiClose');
         const wifiLogEl = document.getElementById('wifiLog');
 
@@ -1280,6 +1297,29 @@
             }
         }
 
+        // Save WiFi credentials without waiting for connection result
+        async function improvSendWifiSaveOnly(ssid, password) {
+            try {
+                wifiLog(`Збереження "${ssid}"...`);
+
+                const ssidBytes = new TextEncoder().encode(ssid);
+                const passBytes = new TextEncoder().encode(password);
+                const totalLen = 1 + ssidBytes.length + 1 + passBytes.length;
+                const data = [0x01, totalLen, ssidBytes.length, ...ssidBytes, passBytes.length, ...passBytes];
+
+                await improvSend(0x03, data);
+
+                // Just wait a moment for ESP32 to save
+                await new Promise(r => setTimeout(r, 500));
+                wifiLog('Збережено! Пристрій спробує підключитись при наступному запуску.', 'success');
+                return true;
+
+            } catch (e) {
+                wifiLog('Помилка: ' + e.message, 'error');
+                return false;
+            }
+        }
+
         async function improvDisconnect() {
             improvReading = false;
             try {
@@ -1304,8 +1344,8 @@
             }
         };
 
-        // Connect button click
-        wifiConnectBtn.onclick = async () => {
+        // Save button - saves credentials without waiting for connection
+        wifiSaveBtn.onclick = async () => {
             const ssid = wifiSsid.value.trim();
             const pass = wifiPass.value;
 
@@ -1314,10 +1354,31 @@
                 return;
             }
 
-            wifiConnectBtn.disabled = true;
+            wifiSaveBtn.disabled = true;
+            wifiTestBtn.disabled = true;
+
+            // Send credentials (ESP32 saves them immediately)
+            await improvSendWifiSaveOnly(ssid, pass);
+
+            wifiSaveBtn.disabled = false;
+            wifiTestBtn.disabled = false;
+        };
+
+        // Test button - saves and waits for connection result
+        wifiTestBtn.onclick = async () => {
+            const ssid = wifiSsid.value.trim();
+            const pass = wifiPass.value;
+
+            if (!ssid) {
+                wifiLog('Введіть назву мережі', 'error');
+                return;
+            }
+
+            wifiSaveBtn.disabled = true;
+            wifiTestBtn.disabled = true;
 
             if (await improvSendWifi(ssid, pass)) {
-                wifiLog('WiFi налаштовано! Пристрій почне пінгувати сервер.', 'success');
+                wifiLog('Підключено! Пристрій почне пінгувати сервер.', 'success');
 
                 // Update UI
                 wifiStatus.textContent = 'WiFi налаштовано!';
@@ -1333,7 +1394,8 @@
                 }, 2000);
             }
 
-            wifiConnectBtn.disabled = false;
+            wifiSaveBtn.disabled = false;
+            wifiTestBtn.disabled = false;
         };
 
         // Close button
