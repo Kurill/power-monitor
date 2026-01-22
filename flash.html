@@ -1056,7 +1056,8 @@
                 await new Promise(r => setTimeout(r, 100));
                 await transport.setRTS(false);
 
-                // 8. Disconnect transport but keep port
+                // 8. Disconnect transport but keep port reference
+                const flashPort = device; // Save reference before cleanUp
                 await transport.disconnect();
                 cleanUp();
 
@@ -1074,7 +1075,7 @@
                 let realDeviceId = null;
                 try {
                     // Reopen the same port for Improv
-                    improvPort = device;
+                    improvPort = flashPort;
                     await improvPort.open({ baudRate: 115200 });
                     improvReader = improvPort.readable.getReader();
                     improvWriter = improvPort.writable.getWriter();
