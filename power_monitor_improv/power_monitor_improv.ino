@@ -110,7 +110,7 @@ void setup() {
         deviceName = "Power Monitor";
     }
     if (serverIp.startsWith("@@") || serverIp.length() == 0) {
-        serverIp = "178.62.112.232";
+        serverIp = "power-monitor.club";
     }
 
     // Check for saved WiFi credentials
@@ -171,7 +171,7 @@ void loop() {
         if (now - lastPing >= PING_INTERVAL || lastPing == 0) {
             lastPing = now;
 
-            String url = "http://" + serverIp + ":8090/ping?device=" + deviceId;
+            String url = "http://" + serverIp + "/ping?device=" + deviceId;
             Serial.printf("Ping: %s\n", url.c_str());
 
             HTTPClient http;
