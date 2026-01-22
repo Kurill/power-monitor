@@ -1305,7 +1305,8 @@
                         return true;
                     } else if (response.type === 0x02) { // ERROR_STATE
                         const errCode = response.data[0];
-                        const errors = ['', 'Invalid RPC', 'Unknown RPC', 'Невірний пароль або мережа недоступна', 'Not authorized'];
+                        if (errCode === 0) continue; // ERROR_NONE - ignore, wait for PROVISIONED
+                        const errors = {1: 'Invalid RPC', 2: 'Unknown RPC', 3: 'Невірний пароль або мережа недоступна', 4: 'Not authorized'};
                         throw new Error(errors[errCode] || `Error ${errCode}`);
                     }
                 }
