@@ -1272,8 +1272,9 @@
                         if (state === 0x03) { // PROVISIONING
                             wifiLog('Підключення...');
                         } else if (state === 0x04) { // PROVISIONED
-                            wifiLog('WiFi налаштовано!', 'success');
-                            return true;
+                            wifiLog('Підключено! Чекаємо URL...');
+                            // Don't return yet - wait for RPC_RESULT with URL
+                            continue;
                         } else if (state === 0x00) { // STOPPED - connection failed
                             // Wait for ERROR_STATE with details
                             continue;
