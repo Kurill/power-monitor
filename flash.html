@@ -866,8 +866,9 @@
                 await new Promise(r => setTimeout(r, 100));
                 await transport.setRTS(false);
 
-                // 9. Disconnect
+                // 9. Disconnect and release port completely
                 await transport.disconnect();
+                try { await device.close(); } catch(e) {}
                 cleanUp();
 
                 // Success - but wait for ESP32 to boot before enabling WiFi
@@ -900,6 +901,9 @@
                 // Cleanup on error
                 if (transport) {
                     try { await transport.disconnect(); } catch(err) { console.error(err); }
+                }
+                if (device) {
+                    try { await device.close(); } catch(err) { console.error(err); }
                 }
                 cleanUp();
 
