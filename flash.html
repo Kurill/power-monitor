@@ -7,7 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2.5.0/dist/serial-launch-button.js?module"></script>
 
     <style>
         :root {
@@ -474,11 +473,6 @@
             margin-top: 4px;
         }
 
-        improv-wifi-serial-launch-button {
-            --improv-primary-color: var(--success);
-            --improv-on-primary-color: white;
-        }
-
         .wifi-btn {
             width: 100%;
             padding: 18px 28px;
@@ -537,6 +531,97 @@
 
         .wifi-status.visible {
             display: block;
+        }
+
+        .wifi-dialog {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .wifi-dialog-content {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 360px;
+        }
+
+        .wifi-dialog h3 {
+            margin: 0 0 20px 0;
+            color: var(--electric);
+            font-family: 'Space Mono', monospace;
+        }
+
+        .wifi-input {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: 'Outfit', sans-serif;
+            box-sizing: border-box;
+        }
+
+        .wifi-input:focus {
+            outline: none;
+            border-color: var(--electric);
+        }
+
+        .wifi-submit {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background: var(--success);
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .wifi-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .wifi-log {
+            background: var(--bg-void);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .wifi-log.visible {
+            display: block;
+        }
+
+        .wifi-log .success { color: var(--success); }
+        .wifi-log .error { color: var(--danger); }
+
+        .wifi-close {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
             animation: fade-in 0.3s ease;
         }
 
@@ -651,12 +736,23 @@
             <div class="step-desc">Після прошивки налаштуй WiFi мережу для пристрою</div>
 
             <div class="wifi-section">
-                <improv-wifi-serial-launch-button id="wifiLauncher">
-                    <button class="wifi-btn" id="wifiBtnInner" slot="activate" disabled>
-                        <span>📶</span>
-                        <span>Налаштувати WiFi</span>
-                    </button>
-                </improv-wifi-serial-launch-button>
+                <button class="wifi-btn" id="wifiBtnInner">
+                    <span>📶</span>
+                    <span>Налаштувати WiFi</span>
+                </button>
+
+                <div id="wifiDialog" class="wifi-dialog" style="display:none;">
+                    <div class="wifi-dialog-content">
+                        <h3>Налаштування WiFi</h3>
+                        <div id="wifiForm">
+                            <input type="text" id="wifiSsid" placeholder="Назва мережі (SSID)" class="wifi-input">
+                            <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
+                            <button id="wifiConnect" class="wifi-submit">Підключити</button>
+                        </div>
+                        <div id="wifiLog" class="wifi-log"></div>
+                        <button id="wifiClose" class="wifi-close">Закрити</button>
+                    </div>
+                </div>
 
                 <div class="wifi-status" id="wifiStatus"></div>
             </div>
@@ -692,7 +788,6 @@
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
         const flashLog = document.getElementById('flashLog');
-        const wifiLauncher = document.getElementById('wifiLauncher');
         const wifiBtnInner = document.getElementById('wifiBtnInner');
         const wifiStatus = document.getElementById('wifiStatus');
         const browserWarning = document.getElementById('browserWarning');
@@ -829,29 +924,18 @@
                     binaryString += String.fromCharCode(fwData[i]);
                 }
 
-                // 6. Flash firmware + erase NVS to clear saved WiFi
+                // 6. Flash firmware
                 setProgress(20, "Прошивка...");
                 flashBtnText.textContent = "Прошивка...";
                 log("Прошивка...");
                 const startTime = Date.now();
 
-                // Create empty NVS data (0xFF bytes) to clear saved WiFi credentials
-                // NVS partition is at 0x9000, size 0x5000 (20KB)
-                const nvsSize = 0x5000;
-                let nvsEmpty = '';
-                for (let i = 0; i < nvsSize; i++) {
-                    nvsEmpty += String.fromCharCode(0xFF);
-                }
-
                 await esploader.writeFlash({
-                    fileArray: [
-                        { data: binaryString, address: 0 },
-                        { data: nvsEmpty, address: 0x9000 }
-                    ],
+                    fileArray: [{ data: binaryString, address: 0 }],
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
-                    eraseAll: true,
+                    eraseAll: false,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const pct = Math.round(20 + (written / total * 75));
@@ -873,6 +957,7 @@
                 // 8. Disconnect and release port completely
                 await transport.disconnect();
                 try { await device.close(); } catch(e) {}
+                try { await device.forget(); } catch(e) {} // Reset browser's port state
                 cleanUp();
 
                 // Success - but wait for ESP32 to boot before enabling WiFi
@@ -908,6 +993,7 @@
                 }
                 if (device) {
                     try { await device.close(); } catch(err) { console.error(err); }
+                    try { await device.forget(); } catch(err) {}
                 }
                 cleanUp();
 
@@ -919,10 +1005,217 @@
             }
         };
 
-        // WiFi setup result
-        wifiLauncher.addEventListener('closed', (event) => {
-            const detail = event.detail || {};
-            if (detail.success) {
+        // Custom Improv WiFi implementation
+        const wifiDialog = document.getElementById('wifiDialog');
+        const wifiSsid = document.getElementById('wifiSsid');
+        const wifiPass = document.getElementById('wifiPass');
+        const wifiConnectBtn = document.getElementById('wifiConnect');
+        const wifiCloseBtn = document.getElementById('wifiClose');
+        const wifiLogEl = document.getElementById('wifiLog');
+
+        let improvPort = null;
+        let improvReader = null;
+        let improvWriter = null;
+
+        function wifiLog(msg, type = '') {
+            wifiLogEl.classList.add('visible');
+            const line = document.createElement('div');
+            if (type) line.className = type;
+            line.textContent = msg;
+            wifiLogEl.appendChild(line);
+            wifiLogEl.scrollTop = wifiLogEl.scrollHeight;
+        }
+
+        // Improv protocol helpers
+        function buildImprovPacket(type, data) {
+            const header = [0x49, 0x4D, 0x50, 0x52, 0x4F, 0x56]; // "IMPROV"
+            const version = 0x01;
+            const packet = [...header, version, type, data.length, ...data];
+            const checksum = packet.reduce((a, b) => a + b, 0) & 0xFF;
+            return new Uint8Array([...packet, checksum, 0x0A]);
+        }
+
+        async function improvSend(type, data = []) {
+            const packet = buildImprovPacket(type, data);
+            await improvWriter.write(packet);
+        }
+
+        async function improvReadPacket(timeout = 5000) {
+            const startTime = Date.now();
+            let buffer = [];
+
+            while (Date.now() - startTime < timeout) {
+                try {
+                    const { value, done } = await Promise.race([
+                        improvReader.read(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 100))
+                    ]);
+
+                    if (done) break;
+                    if (value) {
+                        buffer.push(...value);
+
+                        // Look for IMPROV header
+                        while (buffer.length >= 10) {
+                            const headerIdx = buffer.findIndex((v, i) =>
+                                i <= buffer.length - 6 &&
+                                buffer[i] === 0x49 && buffer[i+1] === 0x4D &&
+                                buffer[i+2] === 0x50 && buffer[i+3] === 0x52 &&
+                                buffer[i+4] === 0x4F && buffer[i+5] === 0x56
+                            );
+
+                            if (headerIdx === -1) {
+                                buffer = buffer.slice(-5);
+                                break;
+                            }
+
+                            if (headerIdx > 0) buffer = buffer.slice(headerIdx);
+
+                            if (buffer.length < 10) break;
+
+                            const dataLen = buffer[8];
+                            const packetLen = 9 + dataLen + 1; // header + type + len + data + checksum
+
+                            if (buffer.length < packetLen) break;
+
+                            const packet = buffer.slice(0, packetLen);
+                            buffer = buffer.slice(packetLen);
+
+                            return {
+                                type: packet[7],
+                                data: packet.slice(9, 9 + dataLen)
+                            };
+                        }
+                    }
+                } catch (e) {
+                    if (e.message !== 'timeout') throw e;
+                }
+            }
+            return null;
+        }
+
+        async function improvConnect() {
+            try {
+                improvPort = await navigator.serial.requestPort();
+                await improvPort.open({ baudRate: 115200 });
+
+                improvReader = improvPort.readable.getReader();
+                improvWriter = improvPort.writable.getWriter();
+
+                wifiLog('Підключено до порту');
+
+                // Send request current state
+                await improvSend(0x03); // REQUEST_CURRENT_STATE
+                wifiLog('Перевірка Improv...');
+
+                const response = await improvReadPacket(3000);
+                if (!response) {
+                    throw new Error('ESP32 не відповідає на Improv');
+                }
+
+                wifiLog('Improv знайдено!', 'success');
+                return true;
+
+            } catch (e) {
+                wifiLog('Помилка: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        async function improvSendWifi(ssid, password) {
+            try {
+                wifiLog(`Підключення до "${ssid}"...`);
+
+                // Build WiFi credentials packet (RPC command format)
+                const ssidBytes = new TextEncoder().encode(ssid);
+                const passBytes = new TextEncoder().encode(password);
+                const totalLen = 1 + ssidBytes.length + 1 + passBytes.length;
+                const data = [0x01, totalLen, ssidBytes.length, ...ssidBytes, passBytes.length, ...passBytes];
+
+                await improvSend(0x03, data); // RPC command
+
+                // Wait for response - ESP32 sends multiple packets
+                let gotProvisioning = false;
+                const startTime = Date.now();
+
+                while (Date.now() - startTime < 20000) {
+                    const response = await improvReadPacket(2000);
+                    if (!response) {
+                        // If we got PROVISIONING state and no more responses, assume success
+                        if (gotProvisioning) {
+                            wifiLog('WiFi налаштовано!', 'success');
+                            return true;
+                        }
+                        continue;
+                    }
+
+                    console.log('Improv response:', response.type, response.data);
+
+                    if (response.type === 0x01) { // CURRENT_STATE
+                        const state = response.data[0];
+                        if (state === 0x03) { // PROVISIONING
+                            wifiLog('Підключення...');
+                            gotProvisioning = true;
+                        } else if (state === 0x04) { // PROVISIONED
+                            wifiLog('WiFi налаштовано!', 'success');
+                            return true;
+                        }
+                    } else if (response.type === 0x04) { // RPC_RESULT - success
+                        wifiLog('WiFi налаштовано!', 'success');
+                        return true;
+                    } else if (response.type === 0x05) { // ERROR_STATE
+                        const errCode = response.data[0];
+                        const errors = ['', 'Invalid RPC', 'Unknown RPC', 'Unable to connect', 'Not authorized'];
+                        throw new Error(errors[errCode] || `Error ${errCode}`);
+                    }
+                }
+
+                // If we got provisioning state, consider it success
+                if (gotProvisioning) {
+                    wifiLog('WiFi налаштовано!', 'success');
+                    return true;
+                }
+
+                throw new Error('Таймаут підключення');
+
+            } catch (e) {
+                wifiLog('Помилка: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        async function improvDisconnect() {
+            try {
+                if (improvReader) { improvReader.releaseLock(); improvReader = null; }
+                if (improvWriter) { improvWriter.releaseLock(); improvWriter = null; }
+                if (improvPort) { await improvPort.close(); improvPort = null; }
+            } catch (e) {}
+        }
+
+        // WiFi button click
+        wifiBtnInner.onclick = async () => {
+            wifiLogEl.innerHTML = '';
+            wifiLogEl.classList.remove('visible');
+            wifiDialog.style.display = 'flex';
+
+            if (await improvConnect()) {
+                wifiSsid.focus();
+            }
+        };
+
+        // Connect button click
+        wifiConnectBtn.onclick = async () => {
+            const ssid = wifiSsid.value.trim();
+            const pass = wifiPass.value;
+
+            if (!ssid) {
+                wifiLog('Введіть назву мережі', 'error');
+                return;
+            }
+
+            wifiConnectBtn.disabled = true;
+
+            if (await improvSendWifi(ssid, pass)) {
                 wifiStatus.textContent = "WiFi налаштовано! Пристрій підключено до мережі.";
                 wifiStatus.classList.add('visible');
                 document.getElementById('step3num').textContent = '✓';
@@ -938,14 +1231,28 @@
                         body: JSON.stringify({ device_id: currentDeviceId })
                     }).catch(() => {});
                 }
+
+                setTimeout(() => {
+                    wifiDialog.style.display = 'none';
+                    improvDisconnect();
+                }, 2000);
             }
-        });
+
+            wifiConnectBtn.disabled = false;
+        };
+
+        // Close button
+        wifiCloseBtn.onclick = async () => {
+            wifiDialog.style.display = 'none';
+            await improvDisconnect();
+        };
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', async () => {
             if (transport) {
                 try { await transport.disconnect(); } catch(e) {}
             }
+            await improvDisconnect();
         });
     </script>
 </body>

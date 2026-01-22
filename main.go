@@ -487,6 +487,8 @@ func main() {
 	http.HandleFunc("/api/history", historyHandler)
 	http.HandleFunc("/history", historyPageHandler)
 	http.HandleFunc("/flash", flashPageHandler)
+	http.HandleFunc("/flash-test", flashTestHandler)
+	http.HandleFunc("/esptool-bundle.js", esptoolBundleHandler)
 	http.HandleFunc("/api/manifest", manifestHandler)
 	http.HandleFunc("/api/firmware", firmwareHandler)
 	http.HandleFunc("/api/my-devices", myDevicesHandler)
@@ -498,6 +500,8 @@ func main() {
 	http.HandleFunc("/api/subscribe", subscribeHandler)
 	http.HandleFunc("/api/unsubscribe/", unsubscribeHandler)
 	http.HandleFunc("/auth/logout", authLogoutHandler)
+	http.HandleFunc("/esptool-js/", esptoolJsHandler)
+	http.HandleFunc("/improv-wifi-sdk/", improvSdkHandler)
 
 	go monitor()
 
@@ -822,6 +826,18 @@ func flashPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
+func flashTestHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/flash-test.html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(content)
+}
+
+func esptoolBundleHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/esptool-bundle.js")
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Write(content)
+}
+
 func historyPageHandler(w http.ResponseWriter, r *http.Request) {
 	content, _ := os.ReadFile("/opt/power-monitor/history.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -920,6 +936,7 @@ func firmwareHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(firmware)
 }
 
@@ -1014,6 +1031,41 @@ func unsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 }
 
+
+func esptoolJsHandler(w http.ResponseWriter, r *http.Request) {
+	// Serve local esptool-js files
+	filename := r.URL.Path[len("/esptool-js/"):]
+	if filename == "" {
+		http.NotFound(w, r)
+		return
+	}
+	// Security: prevent path traversal
+	if filepath.Base(filename) != filename {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, "/opt/power-monitor/esptool-js/"+filename)
+}
+
+func improvSdkHandler(w http.ResponseWriter, r *http.Request) {
+	// Serve Improv WiFi SDK files
+	path := r.URL.Path[len("/improv-wifi-sdk/"):]
+	if path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	// Security: prevent path traversal (allow subdirs like web/)
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path || cleanPath[0] == '/' || cleanPath == ".." || len(cleanPath) > 2 && cleanPath[:3] == "../" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, "/opt/power-monitor/improv-wifi-sdk/"+cleanPath)
+}
 
 func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)

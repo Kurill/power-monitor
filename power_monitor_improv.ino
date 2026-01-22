@@ -82,10 +82,12 @@ bool customConnectWiFi(const char* ssid, const char* password) {
     return false;
 }
 
+bool needsImprov = false;
+
 void setup() {
-    // Start Serial FIRST to catch esptool sync
-    Serial.begin(115200);
-    Serial.setRxBufferSize(256);
+    // Critical: delay before anything to let esptool sync with bootloader
+    // Without this, re-flashing via browser fails
+    delay(3000);
 
     // Init WiFi (needed for MAC address)
     WiFi.mode(WIFI_STA);
@@ -96,7 +98,6 @@ void setup() {
     deviceName = trimPlaceholder(DEVICE_NAME);
     serverIp = trimPlaceholder(SERVER_IP);
 
-    // If placeholders not patched, use defaults
     if (deviceId.startsWith("@@") || deviceId.length() == 0) {
         deviceId = generateDeviceId();
     }
@@ -107,25 +108,7 @@ void setup() {
         serverIp = "178.62.112.232";
     }
 
-    Serial.println("\n=== Power Monitor ===");
-    Serial.printf("Device: %s\n", deviceId.c_str());
-    Serial.printf("Name: %s\n", deviceName.c_str());
-    Serial.printf("Server: %s\n", serverIp.c_str());
-
-    // Setup Improv with dashboard URL + claim parameter
-    String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
-    improvSerial.setDeviceInfo(
-        ImprovTypes::ChipFamily::CF_ESP32,
-        deviceName.c_str(),
-        "1.0.0",
-        "Power Monitor",
-        dashboardUrl.c_str()
-    );
-    improvSerial.onImprovError(onImprovError);
-    improvSerial.onImprovConnected(onImprovConnected);
-    improvSerial.setCustomConnectWiFi(customConnectWiFi);
-
-    // Check for saved credentials
+    // Check for saved WiFi credentials
     prefs.begin("power-mon", true);
     bool configured = prefs.getBool("configured", false);
     String savedSsid = prefs.getString("ssid", "");
@@ -133,19 +116,40 @@ void setup() {
     prefs.end();
 
     if (configured && savedSsid.length() > 0) {
-        Serial.println("Found saved WiFi, connecting...");
+        // WiFi configured - connect directly, no Serial needed
         customConnectWiFi(savedSsid.c_str(), savedPass.c_str());
     } else {
+        // No WiFi - enable Serial for Improv configuration
+        needsImprov = true;
+        Serial.begin(115200);
+        Serial.setRxBufferSize(256);
+
+        Serial.println("\n=== Power Monitor ===");
+        Serial.printf("Device: %s\n", deviceId.c_str());
         Serial.println("No WiFi configured - use Improv to setup");
+
+        String dashboardUrl = "https://power-monitor.club/dashboard?claim=" + deviceId;
+        improvSerial.setDeviceInfo(
+            ImprovTypes::ChipFamily::CF_ESP32,
+            deviceName.c_str(),
+            "1.0.0",
+            "Power Monitor",
+            dashboardUrl.c_str()
+        );
+        improvSerial.onImprovError(onImprovError);
+        improvSerial.onImprovConnected(onImprovConnected);
+        improvSerial.setCustomConnectWiFi(customConnectWiFi);
     }
 }
 
 void loop() {
-    // Handle Improv for WiFi configuration
-    improvSerial.handleSerial();
+    // Handle Improv only if WiFi not configured
+    if (needsImprov) {
+        improvSerial.handleSerial();
+    }
 
     // If connected, do monitoring
-    if (improvSerial.isConnected() || WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED) {
         unsigned long now = millis();
 
         if (now - lastPing >= PING_INTERVAL || lastPing == 0) {
@@ -156,12 +160,10 @@ void loop() {
             HTTPClient http;
             http.begin(url);
             http.setTimeout(10000);
-            int code = http.GET();
-            Serial.printf("Ping -> %d\n", code);
+            http.GET();
             http.end();
         }
     }
 
-    // Minimal delay keeps loop responsive without blocking
     delay(1);
 }
