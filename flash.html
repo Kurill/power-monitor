@@ -957,9 +957,6 @@
                 const fwData = new Uint8Array(await resp.arrayBuffer());
                 log("Завантажено " + fwData.length + " байт", "success");
 
-                // Convert to binary string using latin1 (ISO-8859-1) - 1:1 byte mapping
-                const binaryString = new TextDecoder('iso-8859-1').decode(fwData);
-
                 // 6. Flash firmware
                 setProgress(20, "Прошивка...");
                 flashBtnText.textContent = "Прошивка...";
@@ -967,7 +964,7 @@
                 const startTime = Date.now();
 
                 await esploader.writeFlash({
-                    fileArray: [{ data: binaryString, address: 0 }],
+                    fileArray: [{ data: fwData, address: 0 }],
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
