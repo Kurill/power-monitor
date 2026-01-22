@@ -1434,6 +1434,10 @@
                 wifiLog('Введіть назву мережі', 'error');
                 return;
             }
+            if (pass && pass.length < 8) {
+                wifiLog('Пароль має бути мінімум 8 символів', 'error');
+                return;
+            }
 
             wifiSaveBtn.disabled = true;
             wifiTestBtn.disabled = true;
@@ -1452,6 +1456,10 @@
 
             if (!ssid) {
                 wifiLog('Введіть назву мережі', 'error');
+                return;
+            }
+            if (pass && pass.length < 8) {
+                wifiLog('Пароль має бути мінімум 8 символів', 'error');
                 return;
             }
 
