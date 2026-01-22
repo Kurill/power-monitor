@@ -63,11 +63,15 @@ void onImprovConnected(const char* ssid, const char* password) {
 bool customConnectWiFi(const char* ssid, const char* password) {
     Serial.printf("Connecting to %s...\n", ssid);
 
+    // Ensure clean state before connecting
+    WiFi.disconnect(true);
+    delay(100);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
+    // Wait up to 15 seconds for connection
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 60) {
         delay(250);
         Serial.print(".");
         attempts++;
@@ -79,6 +83,7 @@ bool customConnectWiFi(const char* ssid, const char* password) {
     }
 
     Serial.println("\nConnection failed");
+    WiFi.disconnect(true);
     return false;
 }
 
