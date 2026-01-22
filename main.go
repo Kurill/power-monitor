@@ -1104,7 +1104,7 @@ func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.OwnerEmail = email
-	if deviceName != "" && d.Name == "" {
+	if deviceName != "" {
 		d.Name = deviceName
 	}
 	saveDevice(d)
