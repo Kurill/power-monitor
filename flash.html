@@ -2008,7 +2008,6 @@
                 await improvPort.open({ baudRate: 115200 });
 
                 // Don't set DTR=true - it causes ESP32 reset on some boards
-                // CP2102 should work without it
                 await improvPort.setSignals({ dataTerminalReady: false, requestToSend: false });
 
                 improvReader = improvPort.readable.getReader();
@@ -2020,31 +2019,12 @@
 
                 wifiLog('Підключено до порту');
 
-                // Short wait to drain any pending output
+                // Wait for any boot messages to pass, then clear buffer
+                // Don't send GET_CURRENT_STATE - ImprovWiFiLibrary bug prevents
+                // subsequent commands from working after first response
                 await new Promise(r => setTimeout(r, 1000));
-                improvBuffer = [];  // Clear any pending data
+                improvBuffer = [];
 
-                // Send request current state (RPC command 0x02, data_length 0)
-                const packet = buildImprovPacket(0x03, [0x02, 0x00]);
-                console.log('Sending Improv packet:', Array.from(packet).map(b => b.toString(16).padStart(2, '0')).join(' '));
-                await improvWriter.write(packet);
-                wifiLog('Перевірка Improv...');
-
-                const response = await improvReadPacket(3000);
-                console.log('Buffer after wait:', improvBuffer.length, 'bytes');
-                if (!response) {
-                    // Debug: show what's in buffer
-                    if (improvBuffer.length > 0) {
-                        const bufStr = improvBuffer.slice(0, 100).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                        console.log('Buffer content:', bufStr);
-                        wifiLog('Буфер: ' + bufStr.substring(0, 60));
-                    } else {
-                        wifiLog('Буфер порожній - дані не отримано');
-                    }
-                    throw new Error('ESP32 не відповідає на Improv');
-                }
-
-                wifiLog('Improv знайдено!', 'success');
                 return true;
 
             } catch (e) {
@@ -2227,21 +2207,14 @@
             wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Сканування...</div>';
 
             try {
-                // Release and recreate reader to ensure clean state
-                improvReading = false;
-                await new Promise(r => setTimeout(r, 100));
-                improvReader.releaseLock();
-                improvReader = improvPort.readable.getReader();
+                // Wait a bit before scan (ESP32 needs time between commands)
+                await new Promise(r => setTimeout(r, 500));
                 improvBuffer = [];
 
-                // Restart background reading
-                startImprovReading();
-
-                // Wait for reader to be ready
-                await new Promise(r => setTimeout(r, 100));
-
                 // Send SCAN_WIFI command (RPC command 0x04, data_length 0)
-                await improvSend(0x03, [0x04, 0x00]); // RPC with command_id = 0x04
+                const scanPacket = buildImprovPacket(0x03, [0x04, 0x00]);
+                console.log('Sending WiFi scan packet:', Array.from(scanPacket).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                await improvWriter.write(scanPacket);
 
                 // Wait for scan results - may come as multiple packets
                 const networks = [];
@@ -2250,6 +2223,7 @@
 
                 while (Date.now() - startTime < 15000) {
                     const response = await improvReadPacket(gotResults ? 2000 : 10000);
+                    console.log('Scan response:', response, 'buffer:', improvBuffer.length);
                     if (!response) {
                         if (gotResults) break;
                         continue;
