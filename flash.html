@@ -761,6 +761,22 @@
             box-shadow: none;
         }
 
+        .telegram-hint {
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .telegram-hint a {
+            color: #0088cc;
+            text-decoration: none;
+        }
+
+        .telegram-hint a:hover {
+            text-decoration: underline;
+        }
+
         .telegram-dialog {
             position: fixed;
             inset: 0;
@@ -1390,6 +1406,9 @@
                     <span>🤖</span>
                     <span>Налаштувати Telegram</span>
                 </button>
+                <div class="telegram-hint">
+                    Створи свого бота через <a href="https://t.me/BotFather" target="_blank">@BotFather</a> — він буде надсилати тобі сповіщення
+                </div>
 
                 <div id="telegramDialog" class="telegram-dialog" style="display:none;">
                     <div class="telegram-dialog-content">
