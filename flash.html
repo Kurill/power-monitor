@@ -1531,8 +1531,25 @@
     </div>
 
     <script type="module">
-        // Use local esptool-js bundle with flushInput fix
+        // Use local esptool-js bundle
         import { ESPLoader, Transport } from '/esptool-bundle.js';
+
+        // Patch Transport: setDTR buffers, setRTS sends both (like Python UnixTightReset)
+        // This makes ClassicReset work like UnixTightReset - both signals change atomically
+        const patchState = { dtr: false, rts: false };
+        Transport.prototype.setDTR = async function(state) {
+            patchState.dtr = state;
+            this._DTR_state = state;
+            // Don't send - setRTS will send both
+        };
+        Transport.prototype.setRTS = async function(state) {
+            patchState.rts = state;
+            // Send both signals atomically
+            await this.device.setSignals({
+                dataTerminalReady: patchState.dtr,
+                requestToSend: patchState.rts
+            });
+        };
 
         const SERVER = 'https://power-monitor.club';
         let currentDeviceId = '';
@@ -1600,8 +1617,14 @@
         // Terminal for esptool
         const espLoaderTerminal = {
             clean() { flashLog.innerHTML = ''; },
-            writeLine(data) { log(data); },
-            write(data) { log(data); }
+            writeLine(data) {
+                if (data instanceof Uint8Array) data = new TextDecoder().decode(data);
+                log(String(data));
+            },
+            write(data) {
+                if (data instanceof Uint8Array) data = new TextDecoder().decode(data);
+                log(String(data));
+            }
         };
 
         // Cleanup
@@ -1653,21 +1676,21 @@
                 const deviceInfo = device.getInfo();
                 log("Port: VID=0x" + deviceInfo.usbVendorId?.toString(16) + " PID=0x" + deviceInfo.usbProductId?.toString(16));
 
-                // 2. Create transport
+                // 2. Create transport (patched to set DTR+RTS simultaneously)
                 log("Створення transport...");
                 transport = new Transport(device, true);
 
-                // 3. Create loader
+                // 4. Create loader
                 log("Створення ESPLoader...");
                 esploader = new ESPLoader({
                     transport,
-                    baudrate: 460800,
+                    baudrate: 115200,  // Keep same as ROM baudrate - CP2102 unstable at higher speeds
                     terminal: espLoaderTerminal,
                     debugLogging: false
                 });
 
-                // 4. Connect to chip
-                setProgress(5, "Підключення до ESP32...");
+                // 5. Connect to chip (Transport patched for simultaneous DTR+RTS)
+                setProgress(10, "Підключення до ESP32...");
                 log("Підключення до чіпа...");
                 const chip = await esploader.main();
                 log("Підключено: " + chip, "success");
@@ -1684,14 +1707,22 @@
                 const fwData = new Uint8Array(await resp.arrayBuffer());
                 log("Завантажено " + fwData.length + " байт", "success");
 
-                // 6. Flash firmware
+                // 6. Flash firmware + erase NVS
                 setProgress(20, "Прошивка...");
                 flashBtnText.textContent = "Прошивка...";
-                log("Прошивка...");
+                log("Очищення NVS та прошивка...");
                 const startTime = Date.now();
 
+                // Create blank NVS region (0xFF = erased flash)
+                const NVS_ADDR = 0x9000;
+                const NVS_SIZE = 0x5000; // 20KB
+                const blankNvs = new Uint8Array(NVS_SIZE).fill(0xFF);
+
                 await esploader.writeFlash({
-                    fileArray: [{ data: fwData, address: 0 }],
+                    fileArray: [
+                        { data: blankNvs, address: NVS_ADDR },  // Erase NVS first
+                        { data: fwData, address: 0 }            // Then flash firmware
+                    ],
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
@@ -1706,25 +1737,27 @@
                 const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
                 log("Прошивка завершена за " + totalTime + " сек!", "success");
 
-                // 7. Hard reset
+                // 7. Hard reset (use device directly, not patched transport)
                 setProgress(98, "Перезавантаження...");
                 log("Hard reset...");
-                await transport.setDTR(false);
-                await transport.setRTS(true);
+                await device.setSignals({ dataTerminalReady: false, requestToSend: true }); // EN=LOW
                 await new Promise(r => setTimeout(r, 100));
-                await transport.setRTS(false);
+                await device.setSignals({ dataTerminalReady: false, requestToSend: false }); // EN=HIGH
 
-                // 8. Disconnect transport but keep port reference
+                // 8. Disconnect transport and close port
                 const flashPort = device; // Save reference before cleanUp
                 await transport.disconnect();
                 cleanUp();
+
+                // Explicitly close port before reopening
+                try { await flashPort.close(); } catch(e) {}
 
                 // Success - but wait for ESP32 to boot before enabling WiFi
                 setProgress(100, "Готово! Очікуємо завантаження...");
                 log("Прошивка завершена. Очікуємо завантаження ESP32...", "success");
 
                 // Wait for ESP32 to boot (3s delay in firmware + boot time)
-                await new Promise(r => setTimeout(r, 5000));
+                await new Promise(r => setTimeout(r, 7000));
 
                 log("Отримуємо ID пристрою...");
                 flashSuccess = true;
@@ -1735,6 +1768,10 @@
                     // Reopen the same port for Improv
                     improvPort = flashPort;
                     await improvPort.open({ baudRate: 115200 });
+
+                    // Keep DTR=false to avoid ESP32 reset
+                    await improvPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+
                     improvReader = improvPort.readable.getReader();
                     improvWriter = improvPort.writable.getWriter();
                     improvBuffer = [];
@@ -1753,13 +1790,20 @@
                         }
                     })();
 
-                    await new Promise(r => setTimeout(r, 500));
+                    // Wait and drain boot messages
+                    await new Promise(r => setTimeout(r, 1500));
+                    improvBuffer = []; // Clear boot messages
 
-                    // Send GET_DEVICE_INFO (RPC command 0x03)
-                    await improvSend(0x03, [0x03, 0x00]);
-
-                    // Wait for response
-                    const response = await improvReadPacket(3000);
+                    // Send GET_DEVICE_INFO (RPC command 0x03) with retry
+                    let response = null;
+                    for (let attempt = 0; attempt < 3 && !response; attempt++) {
+                        if (attempt > 0) {
+                            log("Повторна спроба Improv...");
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                        await improvSend(0x03, [0x03, 0x00]);
+                        response = await improvReadPacket(3000);
+                    }
                     if (response && response.type === 0x04) {
                         // Parse: [cmd_id, total_len, str1_len, str1..., str2_len, str2..., ...]
                         // str4 is deviceName which now contains device ID
@@ -1880,8 +1924,9 @@
             const header = [0x49, 0x4D, 0x50, 0x52, 0x4F, 0x56]; // "IMPROV"
             const version = 0x01;
             const packet = [...header, version, type, data.length, ...data];
+            // Checksum = sum of ALL bytes (including IMPROV header) - ImprovWiFiLibrary quirk
             const checksum = packet.reduce((a, b) => a + b, 0) & 0xFF;
-            return new Uint8Array([...packet, checksum, 0x0A]);
+            return new Uint8Array([...packet, checksum]);  // No trailing newline!
         }
 
         async function improvSend(type, data = []) {
@@ -1933,10 +1978,12 @@
                     const { value, done } = await improvReader.read();
                     if (done) break;
                     if (value && value.length > 0) {
+                        console.log('Reader got', value.length, 'bytes:', Array.from(value.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
                         improvBuffer.push(...value);
                     }
                 }
             } catch (e) {
+                console.log('Reader error:', e);
                 // Reader closed or replaced
             }
             if (improvReaderId === myId) {
@@ -1960,6 +2007,10 @@
                 improvPort = await navigator.serial.requestPort();
                 await improvPort.open({ baudRate: 115200 });
 
+                // Don't set DTR=true - it causes ESP32 reset on some boards
+                // CP2102 should work without it
+                await improvPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+
                 improvReader = improvPort.readable.getReader();
                 improvWriter = improvPort.writable.getWriter();
                 improvBuffer = [];
@@ -1969,12 +2020,27 @@
 
                 wifiLog('Підключено до порту');
 
+                // Short wait to drain any pending output
+                await new Promise(r => setTimeout(r, 1000));
+                improvBuffer = [];  // Clear any pending data
+
                 // Send request current state (RPC command 0x02, data_length 0)
-                await improvSend(0x03, [0x02, 0x00]); // GET_CURRENT_STATE
+                const packet = buildImprovPacket(0x03, [0x02, 0x00]);
+                console.log('Sending Improv packet:', Array.from(packet).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                await improvWriter.write(packet);
                 wifiLog('Перевірка Improv...');
 
                 const response = await improvReadPacket(3000);
+                console.log('Buffer after wait:', improvBuffer.length, 'bytes');
                 if (!response) {
+                    // Debug: show what's in buffer
+                    if (improvBuffer.length > 0) {
+                        const bufStr = improvBuffer.slice(0, 100).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                        console.log('Buffer content:', bufStr);
+                        wifiLog('Буфер: ' + bufStr.substring(0, 60));
+                    } else {
+                        wifiLog('Буфер порожній - дані не отримано');
+                    }
                     throw new Error('ESP32 не відповідає на Improv');
                 }
 

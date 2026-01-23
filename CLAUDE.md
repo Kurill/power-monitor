@@ -136,5 +136,11 @@ esptool.py --chip esp32 --port /dev/cu.usbserial-1130 erase_region 0x9000 0x5000
 ### Прошивка ESP32 с Improv
 - Скетч: `power-monitor/power_monitor_improv.ino`
 - Библиотека: ImprovWiFiLibrary
-- Serial инициализируется только если WiFi не настроен
-- После настройки WiFi — Serial отключается, Improv недоступен
+- Serial всегда включен (115200 baud)
+- Improv всегда доступен для переконфигурации WiFi
+
+### Веб-прошивка: важные детали
+- При прошивке стираем NVS регион (0x9000, 0x5000) чтобы очистить сохранённый WiFi
+- Это обязательно, иначе ESP32 подключится к старому WiFi и Improv не получит новые credentials
+- Используем Transport patch для одновременной установки DTR+RTS (нужно для CP2102)
+- Baudrate 115200 (CP2102 нестабилен на 460800)
