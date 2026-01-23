@@ -513,6 +513,386 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Telegram Wizard */
+        .tg-wizard-btn {
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .tg-wizard-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.4);
+        }
+
+        .tg-wizard-btn.configured {
+            background: var(--online);
+        }
+
+        .telegram-dialog {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .telegram-dialog.open {
+            display: flex;
+        }
+
+        .telegram-dialog-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            width: 90%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: dialog-appear 0.3s ease;
+        }
+
+        @keyframes dialog-appear {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .telegram-dialog h3 {
+            margin: 0 0 24px 0;
+            color: #0088cc;
+            font-family: 'Unbounded', sans-serif;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .tg-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 28px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+        }
+
+        .tg-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .tg-step.active { opacity: 1; }
+        .tg-step.done { opacity: 1; }
+
+        .tg-step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 2px solid var(--text-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        .tg-step.active .tg-step-num {
+            border-color: #0088cc;
+            color: #0088cc;
+        }
+
+        .tg-step.done .tg-step-num {
+            background: #0088cc;
+            border-color: #0088cc;
+            color: white;
+        }
+
+        .tg-step-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .tg-step-line {
+            width: 40px;
+            height: 2px;
+            background: var(--border);
+            margin-bottom: 20px;
+        }
+
+        .tg-instruction {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            border-left: 3px solid #0088cc;
+        }
+
+        .tg-instruction-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0, 136, 204, 0.15);
+            color: #0088cc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .tg-instruction-text {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .tg-instruction-text code {
+            background: var(--bg-card);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #0088cc;
+        }
+
+        .tg-link {
+            color: #0088cc;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .tg-link:hover { text-decoration: underline; }
+
+        .tg-input {
+            width: 100%;
+            padding: 14px 16px;
+            margin: 16px 0;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .tg-input:focus {
+            outline: none;
+            border-color: #0088cc;
+            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.15);
+        }
+
+        .tg-btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tg-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .tg-btn-primary {
+            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
+            color: white;
+        }
+
+        .tg-btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
+        }
+
+        .tg-bot-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0, 136, 204, 0.3);
+        }
+
+        .tg-bot-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0088cc 0%, #005580 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .tg-bot-details { flex: 1; }
+        .tg-bot-name { font-weight: 600; font-size: 15px; }
+        .tg-bot-username { font-size: 13px; color: #0088cc; }
+
+        .tg-bot-check {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--online);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .tg-chat-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 16px;
+            background: var(--bg-input);
+        }
+
+        .tg-chat-item {
+            padding: 14px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        .tg-chat-item:last-child { border-bottom: none; }
+        .tg-chat-item:hover { background: rgba(0, 136, 204, 0.1); }
+
+        .tg-chat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .tg-chat-info { flex: 1; }
+        .tg-chat-name { font-weight: 500; font-size: 14px; }
+        .tg-chat-type { font-size: 12px; color: var(--text-dim); }
+
+        .tg-chat-empty {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+
+        .tg-success-icon {
+            font-size: 64px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .tg-success-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            color: var(--online);
+            margin-bottom: 8px;
+        }
+
+        .tg-success-desc {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .tg-selected-chat {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .tg-selected-chat .tg-chat-icon {
+            background: linear-gradient(135deg, var(--online) 0%, #059669 100%);
+        }
+
+        .tg-status {
+            margin-top: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .tg-status.success {
+            display: block;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--online);
+        }
+
+        .tg-status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--offline);
+        }
+
+        .tg-close {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .tg-close:hover {
+            border-color: var(--text-dim);
+            color: var(--text);
+        }
+
         /* Mobile */
         @media (max-width: 600px) {
             .header {
@@ -589,6 +969,109 @@
                 <button class="btn btn-secondary" onclick="closeSubscribeModal()">Скасувати</button>
                 <button class="btn btn-primary" onclick="subscribe()">Підписатись</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Telegram Setup Wizard -->
+    <div class="telegram-dialog" id="telegramDialog">
+        <div class="telegram-dialog-content">
+            <h3>Telegram сповіщення</h3>
+
+            <!-- Step indicator -->
+            <div class="tg-steps">
+                <div class="tg-step active" id="tgStep1Ind">
+                    <div class="tg-step-num">1</div>
+                    <div class="tg-step-label">Токен</div>
+                </div>
+                <div class="tg-step-line"></div>
+                <div class="tg-step" id="tgStep2Ind">
+                    <div class="tg-step-num">2</div>
+                    <div class="tg-step-label">Чат</div>
+                </div>
+                <div class="tg-step-line"></div>
+                <div class="tg-step" id="tgStep3Ind">
+                    <div class="tg-step-num">3</div>
+                    <div class="tg-step-label">Готово</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Bot Token -->
+            <div id="tgStep1" class="tg-panel">
+                <div class="tg-instruction">
+                    <div class="tg-instruction-num">1</div>
+                    <div class="tg-instruction-text">
+                        Відкрий <a href="https://t.me/BotFather" target="_blank" class="tg-link">@BotFather</a> в Telegram
+                    </div>
+                </div>
+                <div class="tg-instruction">
+                    <div class="tg-instruction-num">2</div>
+                    <div class="tg-instruction-text">
+                        Відправ команду <code>/newbot</code> та слідуй інструкціям
+                    </div>
+                </div>
+                <div class="tg-instruction">
+                    <div class="tg-instruction-num">3</div>
+                    <div class="tg-instruction-text">
+                        Скопіюй токен та встав сюди:
+                    </div>
+                </div>
+                <input type="text" id="tgBotToken" placeholder="123456789:ABCdef..." class="tg-input">
+                <button id="tgVerifyToken" class="tg-btn tg-btn-primary">Перевірити токен</button>
+                <div id="tgTokenStatus" class="tg-status"></div>
+            </div>
+
+            <!-- Step 2: Find Chats -->
+            <div id="tgStep2" class="tg-panel" style="display:none;">
+                <div class="tg-bot-info" id="tgBotInfo">
+                    <div class="tg-bot-avatar">🤖</div>
+                    <div class="tg-bot-details">
+                        <div class="tg-bot-name" id="tgBotName">Bot Name</div>
+                        <div class="tg-bot-username" id="tgBotUsername">@username</div>
+                    </div>
+                    <div class="tg-bot-check">✓</div>
+                </div>
+
+                <div class="tg-instruction">
+                    <div class="tg-instruction-num">1</div>
+                    <div class="tg-instruction-text">
+                        Додай бота в групу або канал, куди надсилати сповіщення
+                    </div>
+                </div>
+                <div class="tg-instruction">
+                    <div class="tg-instruction-num">2</div>
+                    <div class="tg-instruction-text">
+                        Напиши будь-яке повідомлення в цей чат
+                    </div>
+                </div>
+
+                <button id="tgFindChats" class="tg-btn tg-btn-primary">
+                    <span>🔍</span> Знайти чати
+                </button>
+
+                <div id="tgChatList" class="tg-chat-list" style="display:none;"></div>
+                <div id="tgStep2Status" class="tg-status"></div>
+            </div>
+
+            <!-- Step 3: Done -->
+            <div id="tgStep3" class="tg-panel" style="display:none;">
+                <div class="tg-success-icon">🎉</div>
+                <div class="tg-success-title">Telegram підключено!</div>
+                <div class="tg-success-desc">
+                    Тепер ви будете отримувати сповіщення про світло
+                </div>
+                <div class="tg-selected-chat">
+                    <div class="tg-chat-icon">💬</div>
+                    <div class="tg-chat-info">
+                        <div class="tg-chat-name" id="tgSelectedChatName">Chat Name</div>
+                        <div class="tg-chat-type" id="tgSelectedChatId">ID: -100...</div>
+                    </div>
+                </div>
+                <button id="tgSendTest" class="tg-btn tg-btn-primary">
+                    <span>📤</span> Надіслати тестове повідомлення
+                </button>
+            </div>
+
+            <button class="tg-close" onclick="closeTelegramDialog()">Закрити</button>
         </div>
     </div>
 
@@ -693,19 +1176,11 @@
                             <button class="btn-save" onclick="renameDevice('${d.id}')">Зберегти</button>
                         </div>
                         <div class="settings-title" style="margin-top:16px">Telegram сповіщення</div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Bot Token</label>
-                                <input type="text" class="form-input" id="token_${d.id}" value="${esc(d.bot_token || '')}" placeholder="від @BotFather">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Chat ID</label>
-                                <input type="text" class="form-input" id="chat_${d.id}" value="${esc(d.chat_id || '')}" placeholder="-100...">
-                            </div>
-                        </div>
-                        <div class="settings-actions">
-                            <button class="btn-save" onclick="saveDevice('${d.id}')">Зберегти</button>
-                            <span class="save-status" id="status_${d.id}"></span>
+                        <div style="margin-bottom:12px">
+                            <button class="tg-wizard-btn ${d.bot_token && d.chat_id ? 'configured' : ''}" onclick="openTelegramWizard('${d.id}')">
+                                ${d.bot_token && d.chat_id ? '✓ Налаштовано' : '🤖 Налаштувати Telegram'}
+                            </button>
+                            ${d.bot_token && d.chat_id ? '<span style="margin-left:12px;font-size:12px;color:var(--text-dim)">Chat: ' + esc(d.chat_id) + '</span>' : ''}
                         </div>
                     </div>
                 `;
@@ -836,6 +1311,216 @@
         document.getElementById('subscribeId').addEventListener('keypress', e => {
             if (e.key === 'Enter') subscribe();
         });
+
+        // ===============================
+        // Telegram Wizard
+        // ===============================
+        let tgCurrentDeviceId = null;
+        let tgBotToken = '';
+        let tgBotInfo = null;
+        let tgChatId = '';
+
+        function openTelegramWizard(deviceId) {
+            tgCurrentDeviceId = deviceId;
+            tgBotToken = '';
+            tgBotInfo = null;
+            tgChatId = '';
+
+            document.getElementById('tgBotToken').value = '';
+            document.getElementById('tgTokenStatus').className = 'tg-status';
+            document.getElementById('tgStep2Status').className = 'tg-status';
+            document.getElementById('tgChatList').style.display = 'none';
+            showTgStep(1);
+
+            document.getElementById('telegramDialog').classList.add('open');
+        }
+
+        function closeTelegramDialog() {
+            document.getElementById('telegramDialog').classList.remove('open');
+            loadDevices(); // Refresh to show updated status
+        }
+
+        function showTgStep(step) {
+            document.getElementById('tgStep1').style.display = step === 1 ? 'block' : 'none';
+            document.getElementById('tgStep2').style.display = step === 2 ? 'block' : 'none';
+            document.getElementById('tgStep3').style.display = step === 3 ? 'block' : 'none';
+
+            document.getElementById('tgStep1Ind').className = 'tg-step' + (step >= 1 ? ' active' : '') + (step > 1 ? ' done' : '');
+            document.getElementById('tgStep2Ind').className = 'tg-step' + (step >= 2 ? ' active' : '') + (step > 2 ? ' done' : '');
+            document.getElementById('tgStep3Ind').className = 'tg-step' + (step >= 3 ? ' active' : '') + (step > 3 ? ' done' : '');
+        }
+
+        function setTgStatus(el, msg, type) {
+            el.textContent = msg;
+            el.className = 'tg-status ' + type;
+        }
+
+        // Step 1: Verify token
+        document.getElementById('tgVerifyToken').onclick = async () => {
+            const token = document.getElementById('tgBotToken').value.trim();
+            const statusEl = document.getElementById('tgTokenStatus');
+
+            if (!token) {
+                setTgStatus(statusEl, 'Введіть токен бота', 'error');
+                return;
+            }
+
+            if (!token.match(/^\d+:[A-Za-z0-9_-]+$/)) {
+                setTgStatus(statusEl, 'Невірний формат токену', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('tgVerifyToken');
+            btn.disabled = true;
+            btn.textContent = 'Перевіряємо...';
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+                const data = await res.json();
+
+                if (data.ok) {
+                    tgBotToken = token;
+                    tgBotInfo = data.result;
+
+                    document.getElementById('tgBotName').textContent = data.result.first_name;
+                    document.getElementById('tgBotUsername').textContent = '@' + data.result.username;
+
+                    setTgStatus(statusEl, 'Бот знайдено!', 'success');
+                    setTimeout(() => showTgStep(2), 500);
+                } else {
+                    setTgStatus(statusEl, 'Токен недійсний: ' + (data.description || 'помилка'), 'error');
+                }
+            } catch (e) {
+                setTgStatus(statusEl, 'Помилка перевірки: ' + e.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Перевірити токен';
+        };
+
+        // Step 2: Find chats
+        document.getElementById('tgFindChats').onclick = async () => {
+            const btn = document.getElementById('tgFindChats');
+            const chatList = document.getElementById('tgChatList');
+            const statusEl = document.getElementById('tgStep2Status');
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Шукаємо...';
+            chatList.style.display = 'block';
+            chatList.innerHTML = '<div class="tg-chat-empty">Шукаємо чати...</div>';
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${tgBotToken}/getUpdates?timeout=1`);
+                const data = await res.json();
+
+                if (!data.ok) throw new Error(data.description || 'Помилка');
+
+                const chats = new Map();
+                for (const update of data.result) {
+                    const msg = update.message || update.channel_post || update.my_chat_member?.chat;
+                    if (msg && msg.chat) {
+                        const chat = msg.chat;
+                        if (!chats.has(chat.id)) {
+                            chats.set(chat.id, {
+                                id: chat.id,
+                                title: chat.title || chat.first_name || chat.username || 'Chat',
+                                type: chat.type,
+                                username: chat.username
+                            });
+                        }
+                    }
+                }
+
+                if (chats.size === 0) {
+                    chatList.innerHTML = '<div class="tg-chat-empty">Чати не знайдено.<br>Додайте бота в групу та напишіть повідомлення.</div>';
+                    setTgStatus(statusEl, 'Додайте бота в чат і натисніть "Знайти чати" ще раз', 'error');
+                } else {
+                    chatList.innerHTML = '';
+                    for (const [id, chat] of chats) {
+                        const icon = chat.type === 'channel' ? '📢' : chat.type === 'group' || chat.type === 'supergroup' ? '👥' : '💬';
+                        const typeLabel = chat.type === 'channel' ? 'Канал' : chat.type === 'group' || chat.type === 'supergroup' ? 'Група' : 'Особистий';
+
+                        const item = document.createElement('div');
+                        item.className = 'tg-chat-item';
+                        item.innerHTML = `
+                            <div class="tg-chat-icon">${icon}</div>
+                            <div class="tg-chat-info">
+                                <div class="tg-chat-name">${esc(chat.title)}</div>
+                                <div class="tg-chat-type">${typeLabel}${chat.username ? ' • @' + chat.username : ''}</div>
+                            </div>
+                        `;
+                        item.onclick = () => selectTgChat(chat);
+                        chatList.appendChild(item);
+                    }
+                    statusEl.className = 'tg-status';
+                }
+            } catch (e) {
+                chatList.innerHTML = '<div class="tg-chat-empty">Помилка: ' + e.message + '</div>';
+                setTgStatus(statusEl, e.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<span>🔍</span> Знайти чати';
+        };
+
+        async function selectTgChat(chat) {
+            tgChatId = chat.id.toString();
+            const statusEl = document.getElementById('tgStep2Status');
+
+            try {
+                const res = await fetch('/api/my-devices/' + tgCurrentDeviceId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bot_token: tgBotToken,
+                        chat_id: tgChatId
+                    })
+                });
+
+                if (!res.ok) throw new Error('Помилка збереження');
+
+                document.getElementById('tgSelectedChatName').textContent = chat.title;
+                document.getElementById('tgSelectedChatId').textContent = 'ID: ' + chat.id;
+                showTgStep(3);
+            } catch (e) {
+                setTgStatus(statusEl, e.message, 'error');
+            }
+        }
+
+        // Step 3: Send test
+        document.getElementById('tgSendTest').onclick = async () => {
+            const btn = document.getElementById('tgSendTest');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Надсилаємо...';
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: tgChatId,
+                        text: '✅ Power Monitor підключено!\n\nТепер ви будете отримувати сповіщення про світло.'
+                    })
+                });
+
+                const data = await res.json();
+                if (data.ok) {
+                    btn.innerHTML = '<span>✓</span> Надіслано!';
+                    btn.style.background = 'var(--online)';
+                } else {
+                    throw new Error(data.description || 'Помилка');
+                }
+            } catch (e) {
+                btn.innerHTML = '<span>❌</span> ' + e.message;
+                btn.style.background = 'var(--offline)';
+            }
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📤</span> Надіслати тестове повідомлення';
+                btn.style.background = '';
+            }, 3000);
+        };
 
         init();
     </script>
