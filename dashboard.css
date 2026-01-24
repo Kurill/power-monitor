@@ -1,0 +1,1248 @@
+        :root {
+            --bg-deep: #06060a;
+            --bg-card: #0d0d14;
+            --bg-elevated: #13131c;
+            --bg-input: #0a0a0f;
+            --electric: #fbbf24;
+            --electric-glow: rgba(251, 191, 36, 0.15);
+            --online: #22c55e;
+            --offline: #ef4444;
+            --text: #f4f4f5;
+            --text-muted: #71717a;
+            --text-dim: #3f3f46;
+            --border: rgba(255,255,255,0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Onest', system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .grid-bg {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(251,191,36,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(251,191,36,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 32px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--electric);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 0 20px var(--electric-glow);
+        }
+
+        .logo-text {
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 800;
+            font-size: 18px;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-email {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .btn-small {
+            padding: 8px 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-small:hover {
+            background: var(--bg-card);
+            color: var(--text);
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--electric);
+            color: var(--bg-deep);
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            border-color: var(--text-dim);
+        }
+
+        /* Section */
+        .section-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-count {
+            background: var(--bg-elevated);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        /* Device cards */
+        .devices-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .device-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .device-card:hover {
+            border-color: var(--text-dim);
+        }
+
+        .device-card.owned {
+            border-left: 3px solid var(--electric);
+        }
+
+        .device-main {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .device-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .device-name {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .device-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .device-id {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .device-status {
+            padding: 6px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .status-online {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--online);
+        }
+
+        .status-offline {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--offline);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-online .status-dot {
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Device actions */
+        .device-actions {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px 16px;
+        }
+
+        .device-action {
+            padding: 8px 14px;
+            background: var(--bg-elevated);
+            border: none;
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .device-action:hover {
+            background: var(--bg-deep);
+            color: var(--text);
+        }
+
+        /* Settings panel */
+        .device-settings {
+            display: none;
+            padding: 20px;
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+        }
+
+        .device-settings.open {
+            display: block;
+        }
+
+        .settings-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .form-input {
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--electric);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .settings-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn-save {
+            padding: 10px 20px;
+            background: var(--electric);
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-deep);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .btn-save:hover {
+            filter: brightness(1.1);
+        }
+
+        .save-status {
+            font-size: 13px;
+            color: var(--online);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.6;
+        }
+
+        .empty-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-desc {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .modal-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .modal-desc {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-actions .btn {
+            flex: 1;
+            justify-content: center;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-link {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 13px;
+            margin: 0 12px;
+        }
+
+        .footer-link:hover {
+            color: var(--electric);
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 48px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid var(--border);
+            border-top-color: var(--electric);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Telegram Wizard */
+        .tg-wizard-btn {
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .tg-wizard-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.4);
+        }
+
+        .tg-wizard-btn.configured {
+            background: var(--online);
+        }
+
+        .telegram-dialog {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .telegram-dialog.open {
+            display: flex;
+        }
+
+        .telegram-dialog-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            width: 90%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: dialog-appear 0.3s ease;
+        }
+
+        @keyframes dialog-appear {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .telegram-dialog h3 {
+            margin: 0 0 24px 0;
+            color: #0088cc;
+            font-family: 'Unbounded', sans-serif;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .tg-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 28px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+        }
+
+        .tg-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .tg-step.active { opacity: 1; }
+        .tg-step.done { opacity: 1; }
+
+        .tg-step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 2px solid var(--text-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        .tg-step.active .tg-step-num {
+            border-color: #0088cc;
+            color: #0088cc;
+        }
+
+        .tg-step.done .tg-step-num {
+            background: #0088cc;
+            border-color: #0088cc;
+            color: white;
+        }
+
+        .tg-step-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .tg-step-line {
+            width: 40px;
+            height: 2px;
+            background: var(--border);
+            margin-bottom: 20px;
+        }
+
+        .tg-instruction {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            border-left: 3px solid #0088cc;
+        }
+
+        .tg-instruction-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0, 136, 204, 0.15);
+            color: #0088cc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .tg-instruction-text {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .tg-instruction-text code {
+            background: var(--bg-card);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #0088cc;
+        }
+
+        .tg-link {
+            color: #0088cc;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .tg-link:hover { text-decoration: underline; }
+
+        .tg-input {
+            width: 100%;
+            padding: 14px 16px;
+            margin: 16px 0;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .tg-input:focus {
+            outline: none;
+            border-color: #0088cc;
+            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.15);
+        }
+
+        .tg-btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tg-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .tg-btn-primary {
+            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
+            color: white;
+        }
+
+        .tg-btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
+        }
+
+        .tg-bot-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0, 136, 204, 0.3);
+        }
+
+        .tg-bot-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0088cc 0%, #005580 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .tg-bot-details { flex: 1; }
+        .tg-bot-name { font-weight: 600; font-size: 15px; }
+        .tg-bot-username { font-size: 13px; color: #0088cc; }
+
+        .tg-bot-check {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--online);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .tg-chat-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 16px;
+            background: var(--bg-input);
+        }
+
+        .tg-chat-item {
+            padding: 14px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        .tg-chat-item:last-child { border-bottom: none; }
+        .tg-chat-item:hover { background: rgba(0, 136, 204, 0.1); }
+
+        .tg-chat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .tg-chat-info { flex: 1; }
+        .tg-chat-name { font-weight: 500; font-size: 14px; }
+        .tg-chat-type { font-size: 12px; color: var(--text-dim); }
+
+        .tg-chat-empty {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+
+        .tg-success-icon {
+            font-size: 64px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .tg-success-title {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            color: var(--online);
+            margin-bottom: 8px;
+        }
+
+        .tg-success-desc {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .tg-selected-chat {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .tg-selected-chat .tg-chat-icon {
+            background: linear-gradient(135deg, var(--online) 0%, #059669 100%);
+        }
+
+        .tg-status {
+            margin-top: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .tg-status.success {
+            display: block;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--online);
+        }
+
+        .tg-status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--offline);
+        }
+
+        .tg-close {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .tg-close:hover {
+            border-color: var(--text-dim);
+            color: var(--text);
+        }
+
+        /* WiFi Wizard */
+        .wifi-wizard-btn {
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            margin-right: 8px;
+        }
+
+        .wifi-wizard-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        }
+
+        .wifi-wizard-btn.configured {
+            background: var(--online);
+        }
+
+        .wifi-wizard-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Settings Buttons Container */
+        .settings-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .wifi-wizard-btn,
+        .tg-wizard-btn {
+            margin-right: 0;
+        }
+
+        /* Pause Toggle */
+        .pause-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .pause-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .pause-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--online);
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pause-toggle.paused {
+            background: #6b7280;
+        }
+
+        .pause-toggle-slider {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        .pause-toggle-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .wifi-dialog {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .wifi-dialog.open {
+            display: flex;
+        }
+
+        .wifi-dialog-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            width: 90%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: dialog-appear 0.3s ease;
+        }
+
+        .wifi-dialog h3 {
+            margin: 0 0 12px 0;
+            color: #22c55e;
+            font-family: 'Unbounded', sans-serif;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .wifi-hint {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .wifi-btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .wifi-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .wifi-btn-connect {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            margin-bottom: 16px;
+        }
+
+        .wifi-btn-connect:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+        }
+
+        .wifi-btn-save {
+            background: var(--electric);
+            color: var(--bg-deep);
+        }
+
+        .wifi-btn-test {
+            background: #22c55e;
+            color: white;
+        }
+
+        .wifi-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .wifi-buttons .wifi-btn {
+            flex: 1;
+        }
+
+        .wifi-network-list {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            background: var(--bg-input);
+        }
+
+        .wifi-network-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        .wifi-network-item:last-child {
+            border-bottom: none;
+        }
+
+        .wifi-network-item:hover {
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .wifi-network-item.selected {
+            background: rgba(34, 197, 94, 0.15);
+            border-left: 3px solid #22c55e;
+        }
+
+        .wifi-network-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .wifi-network-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .wifi-signal {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 14px;
+        }
+
+        .wifi-signal-bar {
+            width: 3px;
+            background: var(--text-dim);
+            border-radius: 1px;
+        }
+
+        .wifi-signal-bar.active {
+            background: #22c55e;
+        }
+
+        .wifi-signal-bar:nth-child(1) { height: 4px; }
+        .wifi-signal-bar:nth-child(2) { height: 7px; }
+        .wifi-signal-bar:nth-child(3) { height: 10px; }
+        .wifi-signal-bar:nth-child(4) { height: 14px; }
+
+        .wifi-network-empty {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        .wifi-input {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .wifi-input:focus {
+            outline: none;
+            border-color: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+        }
+
+        .wifi-log {
+            background: var(--bg-deep);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'SF Mono', monospace;
+            font-size: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .wifi-log.visible {
+            display: block;
+        }
+
+        .wifi-log .success { color: #22c55e; }
+        .wifi-log .error { color: #ef4444; }
+
+        .wifi-success {
+            text-align: center;
+            padding: 24px;
+        }
+
+        .wifi-success-icon {
+            width: 64px;
+            height: 64px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            margin: 0 auto 16px;
+        }
+
+        .wifi-success-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: #22c55e;
+        }
+
+        .wifi-close {
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wifi-close:hover {
+            border-color: var(--text-dim);
+            color: var(--text);
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .user-section {
+                justify-content: space-between;
+            }
+
+            .device-main {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .device-status {
+                align-self: flex-start;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .device-actions {
+                flex-wrap: wrap;
+            }
+        }
