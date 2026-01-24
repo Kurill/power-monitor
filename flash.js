@@ -1,48 +1,16 @@
 // ============================================================
-// Power Monitor - Flash Wizard
+// Power Monitor - Flash Wizard (ESP Web Tools version)
 // ============================================================
-
-import { ESPLoader, Transport } from '/esptool-bundle.js';
-
-// Patch Transport: setDTR buffers, setRTS sends both (for CP2102)
-const patchState = { dtr: false, rts: false };
-Transport.prototype.setDTR = async function(state) {
-    patchState.dtr = state;
-    this._DTR_state = state;
-};
-Transport.prototype.setRTS = async function(state) {
-    patchState.rts = state;
-    await this.device.setSignals({
-        dataTerminalReady: patchState.dtr,
-        requestToSend: patchState.rts
-    });
-};
 
 // ============================================================
 // Constants & State
 // ============================================================
 
-const SERVER = 'https://power-monitor.club';
-
 let currentStep = 1;
-let currentDeviceId = '';
+let deviceName = '';
 let flashedDeviceId = null;
 let flashSuccess = false;
-let wifiConfigured = false;
 let telegramConfigured = false;
-
-// Flashing state
-let device = null;
-let transport = null;
-let esploader = null;
-
-// Improv state
-let improvPort = null;
-let improvReader = null;
-let improvWriter = null;
-let improvBuffer = [];
-let improvReading = false;
-let improvReaderId = 0;
 
 // Telegram state
 let currentBotToken = '';
@@ -50,7 +18,7 @@ let currentBotInfo = null;
 let currentChatId = '';
 
 // ============================================================
-// DOM Elements (initialized in init())
+// DOM Elements
 // ============================================================
 
 const $ = (id) => document.getElementById(id);
@@ -114,22 +82,16 @@ function updateNavButtons() {
         case 2:
             if (flashSuccess) {
                 btnNext.disabled = false;
-                btnNext.textContent = 'Налаштувати WiFi →';
+                btnNext.textContent = 'Налаштувати Telegram →';
                 btnNext.className = 'btn-nav btn-nav-success';
             } else {
                 btnNext.disabled = true;
-                btnNext.textContent = 'Далі';
+                btnNext.textContent = 'Прошийте пристрій';
                 btnNext.className = 'btn-nav btn-nav-primary';
             }
             break;
 
         case 3:
-            btnNext.disabled = false;
-            btnNext.textContent = wifiConfigured ? 'Далі →' : 'Пропустити';
-            btnNext.className = wifiConfigured ? 'btn-nav btn-nav-success' : 'btn-nav';
-            break;
-
-        case 4:
             btnNext.disabled = false;
             btnNext.textContent = 'Готово';
             btnNext.className = telegramConfigured ? 'btn-nav btn-nav-success' : 'btn-nav';
@@ -147,23 +109,19 @@ function goNext() {
     switch (currentStep) {
         case 1:
             if (elements.deviceName.value.trim().length >= 3) {
+                deviceName = elements.deviceName.value.trim();
                 showStep(2);
             }
             break;
         case 2:
             if (flashSuccess) {
                 showStep(3);
-                startWifiSetup();
             }
             break;
         case 3:
-            showStep(4);
-            break;
-        case 4:
             // Go to dashboard
-            const deviceId = flashedDeviceId || currentDeviceId;
-            if (deviceId) {
-                window.location.href = `/dashboard?device=${encodeURIComponent(deviceId)}`;
+            if (flashedDeviceId) {
+                window.location.href = `/dashboard?device=${encodeURIComponent(flashedDeviceId)}`;
             } else {
                 window.location.href = '/dashboard';
             }
@@ -172,274 +130,103 @@ function goNext() {
 }
 
 // ============================================================
-// Step 1: Device Name
+// ESP Web Tools Integration
 // ============================================================
 
-function generateId(name) {
-    const slug = name.toLowerCase()
-        .replace(/[а-яіїєґ]/g, c => {
-            const map = {'а':'a','б':'b','в':'v','г':'h','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya'};
-            return map[c] || c;
-        })
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '')
-        .substring(0, 20);
-    return slug + '_' + Math.random().toString(36).substring(2, 6);
+function setupEspWebTools() {
+    const espButton = elements.espWebInstall;
+
+    // Listen for dialog close event
+    espButton.addEventListener('closed', async () => {
+        console.log('ESP Web Tools dialog closed');
+
+        // Try to get device ID via Improv
+        await getDeviceIdAfterFlash();
+    });
 }
 
-// ============================================================
-// Step 2: Flashing
-// ============================================================
-
-function log(msg, type = '') {
-    elements.flashLog.classList.add('visible');
-    const line = document.createElement('div');
-    if (type) line.className = type;
-    line.textContent = msg;
-    elements.flashLog.appendChild(line);
-    elements.flashLog.scrollTop = elements.flashLog.scrollHeight;
-}
-
-function setProgress(pct, text) {
-    elements.progressContainer.classList.add('visible');
-    elements.progressFill.style.width = pct + '%';
-    elements.progressText.textContent = text;
-}
-
-const espLoaderTerminal = {
-    clean() { elements.flashLog.innerHTML = ''; },
-    writeLine(data) {
-        if (data instanceof Uint8Array) data = new TextDecoder().decode(data);
-        log(String(data));
-    },
-    write(data) {
-        if (data instanceof Uint8Array) data = new TextDecoder().decode(data);
-        log(String(data));
-    }
-};
-
-function cleanUp() {
-    device = null;
-    transport = null;
-    esploader = null;
-}
-
-async function startFlashing() {
-    const name = elements.deviceName.value.trim();
-    if (name.length < 3) return;
-
-    currentDeviceId = generateId(name);
-
-    if (!navigator.serial) {
-        alert("Браузер не підтримує Web Serial. Використай Chrome або Edge.");
-        return;
-    }
-
-    elements.flashBtn.disabled = true;
-    elements.flashBtnText.textContent = "Підключення...";
-    elements.flashBtn.classList.add('flashing');
-
+async function getDeviceIdAfterFlash() {
+    // Try to connect and get device ID
     try {
-        // 1. Request port
-        log("Вибери COM порт...");
-        device = await navigator.serial.requestPort({});
-        const deviceInfo = device.getInfo();
-        log("Port: VID=0x" + deviceInfo.usbVendorId?.toString(16) + " PID=0x" + deviceInfo.usbProductId?.toString(16));
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
 
-        // 2. Create transport
-        log("Створення transport...");
-        transport = new Transport(device, true);
+        // Keep DTR=false to avoid reset
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
 
-        // 3. Create loader
-        log("Створення ESPLoader...");
-        esploader = new ESPLoader({
-            transport,
-            baudrate: 115200,
-            terminal: espLoaderTerminal,
-            debugLogging: false
-        });
+        const reader = port.readable.getReader();
+        const writer = port.writable.getWriter();
 
-        // 4. Connect to chip
-        setProgress(10, "Підключення до ESP32...");
-        log("Підключення до чіпа...");
-        const chip = await esploader.main();
-        log("Підключено: " + chip, "success");
+        // Wait for device to be ready
+        await new Promise(r => setTimeout(r, 1500));
 
-        // 5. Download firmware
-        setProgress(15, "Завантаження прошивки...");
-        elements.flashBtnText.textContent = "Завантаження...";
-        log("Завантаження прошивки...");
+        // Buffer for reading
+        let buffer = [];
+        let reading = true;
 
-        const fwUrl = `${SERVER}/api/firmware?device=${currentDeviceId}&name=${encodeURIComponent(name)}&server=178.62.112.232&improv=true`;
-        const resp = await fetch(fwUrl);
-        if (!resp.ok) throw new Error("Помилка завантаження: " + resp.status);
-
-        const fwData = new Uint8Array(await resp.arrayBuffer());
-        log("Завантажено " + fwData.length + " байт", "success");
-
-        // 6. Flash firmware + erase NVS
-        setProgress(20, "Прошивка...");
-        elements.flashBtnText.textContent = "Прошивка...";
-        log("Очищення NVS та прошивка...");
-        const startTime = Date.now();
-
-        const NVS_ADDR = 0x9000;
-        const NVS_SIZE = 0x5000;
-        const blankNvs = new Uint8Array(NVS_SIZE).fill(0xFF);
-
-        await esploader.writeFlash({
-            fileArray: [
-                { data: blankNvs, address: NVS_ADDR },
-                { data: fwData, address: 0 }
-            ],
-            flashSize: 'keep',
-            flashMode: 'keep',
-            flashFreq: 'keep',
-            eraseAll: false,
-            compress: true,
-            reportProgress: (fileIndex, written, total) => {
-                const pct = Math.round(20 + (written / total * 75));
-                setProgress(pct, `Прошивка: ${Math.round(written / total * 100)}%`);
-            }
-        });
-
-        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-        log("Прошивка завершена за " + totalTime + " сек!", "success");
-
-        // 7. Hard reset
-        setProgress(98, "Перезавантаження...");
-        log("Hard reset...");
-        await device.setSignals({ dataTerminalReady: false, requestToSend: true });
-        await new Promise(r => setTimeout(r, 100));
-        await device.setSignals({ dataTerminalReady: false, requestToSend: false });
-
-        // 8. Cleanup
-        const flashPort = device;
-        await transport.disconnect();
-        cleanUp();
-        try { await flashPort.close(); } catch(e) {}
-
-        // 9. Wait for ESP32 to boot
-        setProgress(100, "Готово! Очікуємо завантаження...");
-        log("Прошивка завершена. Очікуємо завантаження ESP32...", "success");
-        await new Promise(r => setTimeout(r, 7000));
-
-        // 10. Get device ID via Improv
-        log("Отримуємо ID пристрою...");
-        flashSuccess = true;
-
-        try {
-            improvPort = flashPort;
-            await improvPort.open({ baudRate: 115200 });
-            await improvPort.setSignals({ dataTerminalReady: false, requestToSend: false });
-
-            improvReader = improvPort.readable.getReader();
-            improvWriter = improvPort.writable.getWriter();
-            improvBuffer = [];
-
-            improvReading = true;
-            improvReaderId++;
-            const myReaderId = improvReaderId;
-            (async () => {
-                while (improvReading && improvReaderId === myReaderId) {
-                    try {
-                        const { value, done } = await improvReader.read();
-                        if (done || improvReaderId !== myReaderId) break;
-                        if (value) improvBuffer.push(...value);
-                    } catch (e) { break; }
-                }
-            })();
-
-            await new Promise(r => setTimeout(r, 1500));
-            improvBuffer = [];
-
-            let response = null;
-            for (let attempt = 0; attempt < 3 && !response; attempt++) {
-                if (attempt > 0) {
-                    log("Повторна спроба Improv...");
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-                await improvSend(0x03, [0x03, 0x00]);
-                response = await improvReadPacket(3000);
-            }
-
-            if (response && response.type === 0x04) {
-                const data = response.data;
-                let pos = 2;
-                const strings = [];
-                while (pos < data.length && strings.length < 4) {
-                    const len = data[pos];
-                    if (pos + 1 + len > data.length) break;
-                    strings.push(new TextDecoder().decode(new Uint8Array(data.slice(pos + 1, pos + 1 + len))));
-                    pos += 1 + len;
-                }
-                if (strings.length >= 4) {
-                    flashedDeviceId = strings[3];
-                    log("ID пристрою: " + flashedDeviceId, "success");
-                }
-            }
-
-            // Close for now (will reopen for WiFi)
-            improvReading = false;
-            try { improvReader.releaseLock(); } catch(e) {}
-            try { improvWriter.releaseLock(); } catch(e) {}
-            try { await improvPort.close(); } catch(e) {}
-            improvPort = null;
-            improvReader = null;
-            improvWriter = null;
-        } catch (e) {
-            console.error('Get device ID error:', e);
-        }
-
-        // 11. Claim device
-        if (flashedDeviceId) {
+        // Start reading in background
+        (async () => {
             try {
-                const claimUrl = '/api/claim?device=' + encodeURIComponent(flashedDeviceId) +
-                    '&name=' + encodeURIComponent(name);
-                const claimRes = await fetch(claimUrl);
-                if (claimRes.ok) {
-                    log("Пристрій додано до профілю!", "success");
-                } else if (claimRes.status === 401) {
-                    log("Увійдіть в акаунт щоб зберегти пристрій", "error");
+                while (reading) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) buffer.push(...value);
                 }
-            } catch (e) {
-                console.error('Claim error:', e);
+            } catch (e) {}
+        })();
+
+        // Clear any boot messages
+        await new Promise(r => setTimeout(r, 500));
+        buffer = [];
+
+        // Send GET_DEVICE_INFO (RPC command 0x03)
+        const packet = buildImprovPacket(0x03, [0x03, 0x00]);
+        await writer.write(packet);
+
+        // Wait for response
+        const response = await waitForImprovPacket(buffer, 3000);
+
+        if (response && response.type === 0x04) {
+            // Parse device info
+            const data = response.data;
+            let pos = 2;
+            const strings = [];
+            while (pos < data.length && strings.length < 4) {
+                const len = data[pos];
+                if (pos + 1 + len > data.length) break;
+                strings.push(new TextDecoder().decode(new Uint8Array(data.slice(pos + 1, pos + 1 + len))));
+                pos += 1 + len;
+            }
+            if (strings.length >= 4) {
+                flashedDeviceId = strings[3];
+                console.log('Got device ID:', flashedDeviceId);
             }
         }
 
-        // 12. Update UI
-        log("Готово! Можеш налаштувати WiFi.", "success");
-        elements.flashBtnText.textContent = "Прошито ✓";
-        elements.flashBtn.classList.remove('flashing');
-        elements.postFlashActions.classList.add('visible');
-
-        // Update wizard step indicator
-        elements.wizardSteps[1].classList.add('done');
-        updateNavButtons();
+        // Cleanup
+        reading = false;
+        try { reader.releaseLock(); } catch(e) {}
+        try { writer.releaseLock(); } catch(e) {}
+        try { await port.close(); } catch(e) {}
 
     } catch (e) {
-        log("Помилка: " + e.message, "error");
-        console.error(e);
-
-        if (transport) {
-            try { await transport.disconnect(); } catch(err) {}
-        }
-        if (device) {
-            try { await device.close(); } catch(err) {}
-            try { await device.forget(); } catch(err) {}
-        }
-        cleanUp();
-
-        elements.flashBtn.disabled = false;
-        elements.flashBtnText.textContent = "Прошити ESP32";
-        elements.flashBtn.classList.remove('flashing');
-        setProgress(0, "Помилка");
+        console.log('Could not get device ID:', e.message);
     }
-}
 
-// ============================================================
-// Step 3: WiFi Setup (Improv Protocol)
-// ============================================================
+    // If we got a device ID, claim it
+    if (flashedDeviceId) {
+        await claimDevice();
+    }
+
+    // Mark flash as successful and update UI
+    flashSuccess = true;
+    elements.postFlashStatus.classList.add('visible');
+    elements.deviceIdDisplay.textContent = flashedDeviceId
+        ? `ID: ${flashedDeviceId}`
+        : 'Пристрій готовий до налаштування';
+    elements.wizardSteps[1].classList.add('done');
+    updateNavButtons();
+}
 
 function buildImprovPacket(type, data) {
     const header = [0x49, 0x4D, 0x50, 0x52, 0x4F, 0x56];
@@ -449,35 +236,30 @@ function buildImprovPacket(type, data) {
     return new Uint8Array([...packet, checksum]);
 }
 
-async function improvSend(type, data = []) {
-    const packet = buildImprovPacket(type, data);
-    await improvWriter.write(packet);
-}
-
-function parsePacketFromBuffer() {
-    while (improvBuffer.length >= 10) {
-        const headerIdx = improvBuffer.findIndex((v, i) =>
-            i <= improvBuffer.length - 6 &&
-            improvBuffer[i] === 0x49 && improvBuffer[i+1] === 0x4D &&
-            improvBuffer[i+2] === 0x50 && improvBuffer[i+3] === 0x52 &&
-            improvBuffer[i+4] === 0x4F && improvBuffer[i+5] === 0x56
+function parseImprovPacket(buffer) {
+    while (buffer.length >= 10) {
+        const headerIdx = buffer.findIndex((v, i) =>
+            i <= buffer.length - 6 &&
+            buffer[i] === 0x49 && buffer[i+1] === 0x4D &&
+            buffer[i+2] === 0x50 && buffer[i+3] === 0x52 &&
+            buffer[i+4] === 0x4F && buffer[i+5] === 0x56
         );
 
         if (headerIdx === -1) {
-            improvBuffer = improvBuffer.slice(-5);
+            buffer.splice(0, buffer.length - 5);
             return null;
         }
 
-        if (headerIdx > 0) improvBuffer = improvBuffer.slice(headerIdx);
-        if (improvBuffer.length < 10) return null;
+        if (headerIdx > 0) buffer.splice(0, headerIdx);
+        if (buffer.length < 10) return null;
 
-        const dataLen = improvBuffer[8];
+        const dataLen = buffer[8];
         const packetLen = 9 + dataLen + 1;
 
-        if (improvBuffer.length < packetLen) return null;
+        if (buffer.length < packetLen) return null;
 
-        const packet = improvBuffer.slice(0, packetLen);
-        improvBuffer = improvBuffer.slice(packetLen);
+        const packet = buffer.slice(0, packetLen);
+        buffer.splice(0, packetLen);
 
         return {
             type: packet[7],
@@ -487,325 +269,35 @@ function parsePacketFromBuffer() {
     return null;
 }
 
-async function startImprovReading() {
-    const myId = ++improvReaderId;
-    improvReading = true;
-
-    try {
-        while (improvReading && improvReader && improvReaderId === myId) {
-            const { value, done } = await improvReader.read();
-            if (done) break;
-            if (value && value.length > 0) {
-                improvBuffer.push(...value);
-            }
-        }
-    } catch (e) {
-        console.log('Reader error:', e);
-    }
-    if (improvReaderId === myId) {
-        improvReading = false;
-    }
-}
-
-async function improvReadPacket(timeout = 5000) {
+async function waitForImprovPacket(buffer, timeout = 5000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
-        const packet = parsePacketFromBuffer();
+        const packet = parseImprovPacket(buffer);
         if (packet) return packet;
         await new Promise(r => setTimeout(r, 50));
     }
     return null;
 }
 
-function wifiLog(msg, type = '') {
-    elements.wifiLog.classList.add('visible');
-    const line = document.createElement('div');
-    if (type) line.className = type;
-    line.textContent = msg;
-    elements.wifiLog.appendChild(line);
-    elements.wifiLog.scrollTop = elements.wifiLog.scrollHeight;
-}
-
-async function improvConnect() {
-    try {
-        improvPort = await navigator.serial.requestPort();
-        await improvPort.open({ baudRate: 115200 });
-        await improvPort.setSignals({ dataTerminalReady: false, requestToSend: false });
-
-        improvReader = improvPort.readable.getReader();
-        improvWriter = improvPort.writable.getWriter();
-        improvBuffer = [];
-
-        startImprovReading();
-        wifiLog('Підключено до порту');
-
-        await new Promise(r => setTimeout(r, 1000));
-        improvBuffer = [];
-
-        return true;
-    } catch (e) {
-        wifiLog('Помилка: ' + e.message, 'error');
-        return false;
-    }
-}
-
-async function improvDisconnect() {
-    improvReading = false;
-    try {
-        if (improvReader) { improvReader.releaseLock(); improvReader = null; }
-        if (improvWriter) { improvWriter.releaseLock(); improvWriter = null; }
-        if (improvPort) { await improvPort.close(); improvPort = null; }
-    } catch (e) {}
-}
-
-async function startWifiSetup() {
-    elements.wifiLog.innerHTML = '';
-    elements.wifiLog.classList.remove('visible');
-    elements.wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Підключення...</div>';
-    elements.wifiSsid.value = '';
-    elements.wifiPass.value = '';
-
-    if (await improvConnect()) {
-        await improvScanNetworks();
-    }
-}
-
-async function improvScanNetworks() {
-    wifiLog('Сканування мереж...');
-    elements.wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Сканування...</div>';
+async function claimDevice() {
+    if (!flashedDeviceId || !deviceName) return;
 
     try {
-        await new Promise(r => setTimeout(r, 500));
-        improvBuffer = [];
-
-        const scanPacket = buildImprovPacket(0x03, [0x04, 0x00]);
-        await improvWriter.write(scanPacket);
-
-        const networks = [];
-        const startTime = Date.now();
-        let gotResults = false;
-
-        while (Date.now() - startTime < 15000) {
-            const response = await improvReadPacket(gotResults ? 2000 : 10000);
-            if (!response) {
-                if (gotResults) break;
-                continue;
-            }
-
-            if (response.type === 0x04) {
-                gotResults = true;
-                const data = response.data;
-
-                if (data.length <= 2 || (data.length > 1 && data[1] === 0)) {
-                    break;
-                }
-
-                let offset = 2;
-
-                if (offset >= data.length) continue;
-                const ssidLen = data[offset++];
-                if (offset + ssidLen > data.length) continue;
-                const ssid = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + ssidLen)));
-                offset += ssidLen;
-
-                if (offset >= data.length) continue;
-                const rssiLen = data[offset++];
-                if (offset + rssiLen > data.length) continue;
-                let rssi = 0;
-                if (rssiLen === 1) {
-                    rssi = data[offset] > 127 ? data[offset] - 256 : data[offset];
-                } else {
-                    rssi = parseInt(new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + rssiLen)))) || 0;
-                }
-                offset += rssiLen;
-
-                if (offset >= data.length) continue;
-                const authLen = data[offset++];
-                if (offset + authLen > data.length) continue;
-                const auth = new TextDecoder().decode(new Uint8Array(data.slice(offset, offset + authLen)));
-
-                if (ssid) {
-                    networks.push({ ssid, rssi, auth: auth === 'YES' });
-                }
-            } else if (response.type === 0x02) {
-                const errCode = response.data[0];
-                throw new Error(`Scan error: ${errCode}`);
-            }
+        const claimUrl = '/api/claim?device=' + encodeURIComponent(flashedDeviceId) +
+            '&name=' + encodeURIComponent(deviceName);
+        const res = await fetch(claimUrl, { credentials: 'include' });
+        if (res.ok) {
+            console.log('Device claimed successfully');
+        } else if (res.status === 401) {
+            console.log('Not logged in, device not claimed');
         }
-
-        // Remove duplicates
-        const uniqueNetworks = [];
-        const seen = new Set();
-        networks.sort((a, b) => b.rssi - a.rssi);
-        for (const net of networks) {
-            if (!seen.has(net.ssid)) {
-                seen.add(net.ssid);
-                uniqueNetworks.push(net);
-            }
-        }
-
-        elements.wifiNetworkList.innerHTML = '';
-        if (uniqueNetworks.length > 0) {
-            uniqueNetworks.forEach(net => {
-                const bars = net.rssi > -50 ? 4 : net.rssi > -60 ? 3 : net.rssi > -70 ? 2 : 1;
-                const signalBars = [1,2,3,4].map(i =>
-                    `<div class="wifi-signal-bar ${i <= bars ? 'active' : ''}"></div>`
-                ).join('');
-
-                const item = document.createElement('div');
-                item.className = 'wifi-network-item';
-                item.dataset.ssid = net.ssid;
-                item.innerHTML = `
-                    <span class="wifi-network-name">${escapeHtml(net.ssid)}</span>
-                    <span class="wifi-network-info">
-                        <span class="wifi-signal">${signalBars}</span>
-                        ${net.auth ? '🔒' : ''}
-                    </span>
-                `;
-                item.onclick = () => selectNetwork(item, net.ssid);
-                elements.wifiNetworkList.appendChild(item);
-            });
-            wifiLog(`Знайдено ${uniqueNetworks.length} мереж`, 'success');
-        } else {
-            elements.wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Мережі не знайдено</div>';
-            wifiLog('Мережі не знайдено. Введіть SSID вручну.');
-        }
-
     } catch (e) {
-        wifiLog('Сканування недоступне. Введіть SSID вручну.', 'error');
-        console.error('Scan error:', e);
-        elements.wifiNetworkList.innerHTML = '<div class="wifi-network-empty">Помилка сканування</div>';
+        console.error('Claim error:', e);
     }
-}
-
-function selectNetwork(item, ssid) {
-    document.querySelectorAll('.wifi-network-item').forEach(el => el.classList.remove('selected'));
-    item.classList.add('selected');
-    elements.wifiSsid.value = ssid;
-    elements.wifiPass.focus();
-}
-
-async function saveWifi() {
-    const ssid = elements.wifiSsid.value.trim();
-    const pass = elements.wifiPass.value;
-
-    if (!ssid) {
-        wifiLog('Введіть назву мережі', 'error');
-        return;
-    }
-    if (pass && pass.length < 8) {
-        wifiLog('Пароль має бути мінімум 8 символів', 'error');
-        return;
-    }
-
-    elements.wifiSaveBtn.disabled = true;
-    elements.wifiTestBtn.disabled = true;
-
-    try {
-        wifiLog(`Збереження "${ssid}"...`);
-
-        const ssidBytes = new TextEncoder().encode(ssid);
-        const passBytes = new TextEncoder().encode(pass);
-        const totalLen = 1 + ssidBytes.length + 1 + passBytes.length;
-        const data = [0x01, totalLen, ssidBytes.length, ...ssidBytes, passBytes.length, ...passBytes];
-
-        await improvSend(0x03, data);
-        await new Promise(r => setTimeout(r, 500));
-
-        wifiLog('Збережено! Пристрій спробує підключитись при наступному запуску.', 'success');
-    } catch (e) {
-        wifiLog('Помилка: ' + e.message, 'error');
-    }
-
-    elements.wifiSaveBtn.disabled = false;
-    elements.wifiTestBtn.disabled = false;
-}
-
-async function testWifi() {
-    const ssid = elements.wifiSsid.value.trim();
-    const pass = elements.wifiPass.value;
-
-    if (!ssid) {
-        wifiLog('Введіть назву мережі', 'error');
-        return;
-    }
-    if (pass && pass.length < 8) {
-        wifiLog('Пароль має бути мінімум 8 символів', 'error');
-        return;
-    }
-
-    elements.wifiSaveBtn.disabled = true;
-    elements.wifiTestBtn.disabled = true;
-
-    try {
-        wifiLog(`Підключення до "${ssid}"...`);
-
-        const ssidBytes = new TextEncoder().encode(ssid);
-        const passBytes = new TextEncoder().encode(pass);
-        const totalLen = 1 + ssidBytes.length + 1 + passBytes.length;
-        const data = [0x01, totalLen, ssidBytes.length, ...ssidBytes, passBytes.length, ...passBytes];
-
-        await improvSend(0x03, data);
-
-        const startTime = Date.now();
-        while (Date.now() - startTime < 20000) {
-            const response = await improvReadPacket(12000);
-            if (!response) continue;
-
-            if (response.type === 0x01) {
-                const state = response.data[0];
-                if (state === 0x03) {
-                    wifiLog('Підключення...');
-                } else if (state === 0x04) {
-                    wifiLog('Підключено! Чекаємо URL...');
-                    continue;
-                }
-            } else if (response.type === 0x04) {
-                wifiLog('WiFi налаштовано!', 'success');
-                wifiConfigured = true;
-
-                // Save wifi_ssid to server
-                const deviceId = flashedDeviceId || currentDeviceId;
-                if (deviceId) {
-                    try {
-                        await fetch(`/api/my-devices/${deviceId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ wifi_ssid: ssid })
-                        });
-                    } catch (e) {
-                        console.error('Failed to save wifi_ssid:', e);
-                    }
-                }
-
-                elements.wifiStatusInline.textContent = '✓ WiFi налаштовано';
-                elements.wifiStatusInline.classList.add('visible');
-                elements.wizardSteps[2].classList.add('done');
-                updateNavButtons();
-
-                elements.wifiSaveBtn.disabled = false;
-                elements.wifiTestBtn.disabled = false;
-                return;
-            } else if (response.type === 0x02) {
-                const errCode = response.data[0];
-                if (errCode === 0) continue;
-                const errors = {1: 'Invalid RPC', 2: 'Unknown RPC', 3: 'Невірний пароль або мережа недоступна', 4: 'Not authorized'};
-                throw new Error(errors[errCode] || `Error ${errCode}`);
-            }
-        }
-
-        throw new Error('Таймаут підключення');
-    } catch (e) {
-        wifiLog('Помилка: ' + e.message, 'error');
-    }
-
-    elements.wifiSaveBtn.disabled = false;
-    elements.wifiTestBtn.disabled = false;
 }
 
 // ============================================================
-// Step 4: Telegram Setup
+// Step 3: Telegram Setup
 // ============================================================
 
 let tgCurrentStep = 1;
@@ -936,13 +428,12 @@ async function selectChat(chat) {
     currentChatId = chat.id.toString();
 
     try {
-        const deviceId = flashedDeviceId || currentDeviceId;
-        if (!deviceId) {
+        if (!flashedDeviceId) {
             setTgStatus(elements.tgStep2Status, 'Спочатку прошийте пристрій', 'error');
             return;
         }
 
-        const res = await fetch(`/api/my-devices/${deviceId}`, {
+        const res = await fetch(`/api/my-devices/${flashedDeviceId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -960,7 +451,7 @@ async function selectChat(chat) {
         elements.tgSelectedChatId.textContent = 'ID: ' + chat.id;
 
         telegramConfigured = true;
-        elements.wizardSteps[3].classList.add('done');
+        elements.wizardSteps[2].classList.add('done');
         updateNavButtons();
 
         showTgSubstep(3);
@@ -1033,26 +524,12 @@ function init() {
         deviceName: $('deviceName'),
 
         // Step 2: Flash
+        espWebInstall: $('espWebInstall'),
         flashBtn: $('flashBtn'),
-        flashBtnText: $('flashBtnText'),
-        progressContainer: $('progressContainer'),
-        progressFill: $('progressFill'),
-        progressText: $('progressText'),
-        flashLog: $('flashLog'),
-        postFlashActions: $('postFlashActions'),
-        btnGoToDashboard: $('btnGoToDashboard'),
-        btnConfigureWifi: $('btnConfigureWifi'),
+        postFlashStatus: $('postFlashStatus'),
+        deviceIdDisplay: $('deviceIdDisplay'),
 
-        // Step 3: WiFi
-        wifiNetworkList: $('wifiNetworkList'),
-        wifiSsid: $('wifiSsid'),
-        wifiPass: $('wifiPass'),
-        wifiSaveBtn: $('wifiSave'),
-        wifiTestBtn: $('wifiTest'),
-        wifiLog: $('wifiLog'),
-        wifiStatusInline: $('wifiStatusInline'),
-
-        // Step 4: Telegram
+        // Step 3: Telegram
         tgSubsteps: document.querySelectorAll('.tg-substep'),
         tgPanels: document.querySelectorAll('.tg-panel'),
         tgBotToken: $('tgBotToken'),
@@ -1078,36 +555,16 @@ function init() {
     elements.btnBack.addEventListener('click', goBack);
     elements.btnNext.addEventListener('click', goNext);
 
-    // Step 2: Flash
-    elements.flashBtn.addEventListener('click', startFlashing);
-    elements.btnGoToDashboard.addEventListener('click', () => {
-        const deviceId = flashedDeviceId || currentDeviceId;
-        window.location.href = deviceId ? `/dashboard?device=${encodeURIComponent(deviceId)}` : '/dashboard';
-    });
-    elements.btnConfigureWifi.addEventListener('click', () => {
-        showStep(3);
-        startWifiSetup();
-    });
+    // Step 2: ESP Web Tools
+    setupEspWebTools();
 
-    // Step 3: WiFi
-    elements.wifiSaveBtn.addEventListener('click', saveWifi);
-    elements.wifiTestBtn.addEventListener('click', testWifi);
-
-    // Step 4: Telegram
+    // Step 3: Telegram
     elements.tgVerifyToken.addEventListener('click', verifyToken);
     elements.tgFindChats.addEventListener('click', findChats);
     elements.tgSendTest.addEventListener('click', sendTestMessage);
 
     // Initialize wizard
     showStep(1);
-
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', async () => {
-        if (transport) {
-            try { await transport.disconnect(); } catch(e) {}
-        }
-        await improvDisconnect();
-    });
 }
 
 // Start when DOM is ready
