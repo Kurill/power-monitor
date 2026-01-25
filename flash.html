@@ -7,8 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/flash.css?v=2">
-    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+    <link rel="stylesheet" href="/flash.css?v=1">
 </head>
 <body>
     <div class="circuit-bg"></div>
@@ -45,6 +44,11 @@
             <div class="wizard-step-line"></div>
             <div class="wizard-step">
                 <div class="wizard-step-num">3</div>
+                <div class="wizard-step-label">WiFi</div>
+            </div>
+            <div class="wizard-step-line"></div>
+            <div class="wizard-step">
+                <div class="wizard-step-num">4</div>
                 <div class="wizard-step-label">Telegram</div>
             </div>
         </div>
@@ -63,45 +67,65 @@
 
             <!-- ==================== STEP 2: Flash ==================== -->
             <div class="wizard-panel" id="panel2">
-                <div class="panel-title">Прошивка та WiFi</div>
+                <div class="panel-title">Прошивка ESP32</div>
                 <div class="panel-desc">
-                    Підключи ESP32 до USB та натисни кнопку. Після прошивки з'явиться налаштування WiFi.
+                    Підключи ESP32 до USB та натисни кнопку прошивки
                 </div>
 
-                <div class="flash-section">
-                    <esp-web-install-button id="espWebInstall" manifest="/manifest.json">
-                        <button slot="activate" class="btn btn-primary" id="flashBtn">
-                            <span>⚡</span>
-                            <span>Прошити ESP32</span>
-                        </button>
-                        <div slot="unsupported" class="browser-unsupported">
-                            Браузер не підтримується. Використай Chrome або Edge.
-                        </div>
-                        <div slot="not-allowed" class="browser-unsupported">
-                            Потрібен HTTPS для роботи з USB.
-                        </div>
-                    </esp-web-install-button>
+                <button class="btn btn-primary" id="flashBtn">
+                    <span>⚡</span>
+                    <span id="flashBtnText">Прошити ESP32</span>
+                </button>
 
-                    <div class="flash-hint">
-                        <div class="hint-icon">💡</div>
-                        <div class="hint-text">
-                            ESP Web Tools автоматично визначить тип плати та налаштує WiFi після прошивки
-                        </div>
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
                     </div>
+                    <div class="progress-text" id="progressText">Підготовка...</div>
                 </div>
 
-                <!-- Post-flash status -->
-                <div class="post-flash-status" id="postFlashStatus">
-                    <div class="status-icon">✓</div>
-                    <div class="status-text">
-                        <div class="status-title">Прошивка завершена!</div>
-                        <div class="status-desc" id="deviceIdDisplay">Пристрій готовий до налаштування</div>
-                    </div>
+                <div class="flash-log" id="flashLog"></div>
+
+                <!-- Post-flash actions -->
+                <div class="post-flash-actions" id="postFlashActions">
+                    <button class="btn btn-success" id="btnGoToDashboard">
+                        <span>📱</span>
+                        Перейти до пристроїв
+                    </button>
+                    <button class="btn btn-secondary" id="btnConfigureWifi">
+                        <span>📶</span>
+                        Налаштувати WiFi
+                    </button>
                 </div>
             </div>
 
-            <!-- ==================== STEP 3: Telegram ==================== -->
+            <!-- ==================== STEP 3: WiFi ==================== -->
             <div class="wizard-panel" id="panel3">
+                <div class="panel-title">Налаштування WiFi</div>
+                <div class="panel-desc">
+                    Обери мережу зі списку або введи дані вручну
+                </div>
+
+                <div class="wifi-section">
+                    <div id="wifiNetworkList" class="wifi-network-list">
+                        <div class="wifi-network-empty">Натисни "Далі" на попередньому кроці</div>
+                    </div>
+
+                    <input type="text" id="wifiSsid" placeholder="Або введи SSID вручну" class="wifi-input">
+                    <input type="password" id="wifiPass" placeholder="Пароль" class="wifi-input">
+
+                    <div class="wifi-buttons">
+                        <button id="wifiSave" class="btn btn-secondary">Зберегти</button>
+                        <button id="wifiTest" class="btn btn-success">Перевірити</button>
+                    </div>
+
+                    <div id="wifiLog" class="wifi-log"></div>
+                    <div id="wifiStatusInline" class="wifi-status-inline"></div>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 4: Telegram ==================== -->
+            <div class="wizard-panel" id="panel4">
                 <div class="panel-title">Telegram сповіщення</div>
                 <div class="panel-desc">
                     Підключи свого бота для отримання сповіщень про світло
@@ -222,13 +246,13 @@
 
         <!-- Footer -->
         <div class="footer">
-            <a href="/" class="footer-link">
+            <a href="/dashboard" class="footer-link">
                 <span>←</span>
-                <span>На головну</span>
+                <span>Мої пристрої</span>
             </a>
         </div>
     </div>
 
-    <script type="module" src="/flash.js?v=3"></script>
+    <script type="module" src="/flash.js?v=2"></script>
 </body>
 </html>

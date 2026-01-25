@@ -506,10 +506,10 @@
         /* Telegram Wizard */
         .tg-wizard-btn {
             padding: 10px 16px;
-            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
-            border: none;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            color: white;
+            color: var(--text);
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
@@ -520,23 +520,25 @@
         }
 
         .tg-wizard-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.4);
+            border-color: var(--electric);
+            color: var(--electric);
         }
 
         .tg-wizard-btn.configured {
             background: var(--online);
+            border-color: var(--online);
+            color: white;
         }
 
         .telegram-dialog {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.9);
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
         }
 
         .telegram-dialog.open {
@@ -546,23 +548,24 @@
         .telegram-dialog-content {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 20px;
+            border-radius: 16px;
             padding: 28px;
             width: 90%;
-            max-width: 420px;
+            max-width: 440px;
             max-height: 90vh;
             overflow-y: auto;
-            animation: dialog-appear 0.3s ease;
+            animation: dialog-appear 0.25s ease;
+            box-shadow: 0 0 60px rgba(251, 191, 36, 0.08);
         }
 
         @keyframes dialog-appear {
-            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            from { opacity: 0; transform: scale(0.96) translateY(8px); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
 
         .telegram-dialog h3 {
             margin: 0 0 24px 0;
-            color: #0088cc;
+            color: var(--electric);
             font-family: 'Unbounded', sans-serif;
             font-size: 18px;
             text-align: center;
@@ -577,6 +580,7 @@
             padding: 16px;
             background: var(--bg-elevated);
             border-radius: 12px;
+            border: 1px solid var(--border);
         }
 
         .tg-step {
@@ -584,7 +588,7 @@
             flex-direction: column;
             align-items: center;
             gap: 6px;
-            opacity: 0.4;
+            opacity: 0.35;
             transition: opacity 0.3s;
         }
 
@@ -606,20 +610,22 @@
         }
 
         .tg-step.active .tg-step-num {
-            border-color: #0088cc;
-            color: #0088cc;
+            border-color: var(--electric);
+            color: var(--electric);
+            box-shadow: 0 0 12px var(--electric-glow);
         }
 
         .tg-step.done .tg-step-num {
-            background: #0088cc;
-            border-color: #0088cc;
-            color: white;
+            background: var(--electric);
+            border-color: var(--electric);
+            color: var(--bg-deep);
         }
 
         .tg-step-label {
             font-size: 11px;
             color: var(--text-dim);
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .tg-step-line {
@@ -633,19 +639,19 @@
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            margin-bottom: 16px;
-            padding: 12px;
+            margin-bottom: 14px;
+            padding: 12px 14px;
             background: var(--bg-elevated);
             border-radius: 10px;
-            border-left: 3px solid #0088cc;
+            border-left: 3px solid var(--electric);
         }
 
         .tg-instruction-num {
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            background: rgba(0, 136, 204, 0.15);
-            color: #0088cc;
+            background: var(--electric-glow);
+            color: var(--electric);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -665,16 +671,43 @@
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 13px;
-            color: #0088cc;
+            color: var(--electric);
+            border: 1px solid var(--border);
         }
 
         .tg-link {
-            color: #0088cc;
+            color: var(--electric);
             text-decoration: none;
             font-weight: 600;
         }
 
         .tg-link:hover { text-decoration: underline; }
+
+        .tg-hint {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            background: rgba(251, 191, 36, 0.06);
+            border: 1px solid rgba(251, 191, 36, 0.15);
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+
+        .tg-hint-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .tg-hint-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .tg-hint-text strong {
+            color: var(--electric);
+        }
 
         .tg-input {
             width: 100%;
@@ -686,12 +719,13 @@
             color: var(--text);
             font-size: 14px;
             font-family: 'SF Mono', monospace;
+            transition: all 0.2s;
         }
 
         .tg-input:focus {
             outline: none;
-            border-color: #0088cc;
-            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.15);
+            border-color: var(--electric);
+            box-shadow: 0 0 0 3px var(--electric-glow);
         }
 
         .tg-btn {
@@ -707,6 +741,7 @@
             justify-content: center;
             gap: 8px;
             transition: all 0.2s ease;
+            font-family: inherit;
         }
 
         .tg-btn:disabled {
@@ -715,13 +750,13 @@
         }
 
         .tg-btn-primary {
-            background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
-            color: white;
+            background: var(--electric);
+            color: var(--bg-deep);
         }
 
         .tg-btn-primary:hover:not(:disabled) {
+            filter: brightness(1.1);
             transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
         }
 
         .tg-bot-info {
@@ -732,14 +767,14 @@
             background: var(--bg-elevated);
             border-radius: 12px;
             margin-bottom: 20px;
-            border: 1px solid rgba(0, 136, 204, 0.3);
+            border: 1px solid var(--border);
         }
 
         .tg-bot-avatar {
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #0088cc 0%, #005580 100%);
+            background: var(--electric);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -748,7 +783,7 @@
 
         .tg-bot-details { flex: 1; }
         .tg-bot-name { font-weight: 600; font-size: 15px; }
-        .tg-bot-username { font-size: 13px; color: #0088cc; }
+        .tg-bot-username { font-size: 13px; color: var(--electric); }
 
         .tg-bot-check {
             width: 28px;
@@ -779,11 +814,13 @@
             align-items: center;
             gap: 12px;
             border-bottom: 1px solid var(--border);
-            transition: background 0.15s;
+            transition: all 0.15s;
         }
 
         .tg-chat-item:last-child { border-bottom: none; }
-        .tg-chat-item:hover { background: rgba(0, 136, 204, 0.1); }
+        .tg-chat-item:hover {
+            background: var(--electric-glow);
+        }
 
         .tg-chat-icon {
             width: 40px;
@@ -875,7 +912,9 @@
             color: var(--text-muted);
             font-size: 14px;
             cursor: pointer;
-            margin-top: 8px;
+            margin-top: 12px;
+            font-family: inherit;
+            transition: all 0.2s;
         }
 
         .tg-close:hover {
