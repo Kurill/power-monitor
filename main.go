@@ -197,7 +197,7 @@ func loadLastState(deviceID string) (*DeviceState, error) {
 	} else {
 		state.IsDown = false
 		state.UpSince = ts
-		state.LastPing = ts
+		state.LastPing = now
 	}
 	return state, nil
 }
