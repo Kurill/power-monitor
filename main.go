@@ -38,15 +38,20 @@ var googleOAuthConfig = &oauth2.Config{
 	Endpoint:     google.Endpoint,
 }
 
+const (
+	greenAvatar = "/opt/power-monitor/green.png"
+	redAvatar   = "/opt/power-monitor/red.png"
+)
+
 type DeviceConfig struct {
-	ID          string
-	Name        string
-	ChatID      string
-	BotToken    string
-	GreenAvatar string
-	RedAvatar   string
-	Configured  bool
-	OwnerEmail  string
+	ID         string
+	Name       string
+	ChatID     string
+	BotToken   string
+	Configured bool
+	OwnerEmail string
+	WifiSSID   string
+	Paused     bool
 }
 
 type DeviceState struct {
@@ -92,15 +97,16 @@ func initDB() error {
 			name TEXT NOT NULL,
 			chat_id TEXT,
 			bot_token TEXT,
-			green_avatar TEXT,
-			red_avatar TEXT,
 			owner_email TEXT,
+			wifi_ssid TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
 	
-	// Add owner_email column if not exists
+	// Migration: add columns if not exists (for existing DBs)
 	db.Exec("ALTER TABLE devices ADD COLUMN owner_email TEXT")
+	db.Exec("ALTER TABLE devices ADD COLUMN wifi_ssid TEXT")
+	db.Exec("ALTER TABLE devices ADD COLUMN paused INTEGER DEFAULT 0")
 
 	// Create subscriptions table
 	db.Exec(`CREATE TABLE IF NOT EXISTS subscriptions (
@@ -109,43 +115,49 @@ func initDB() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (email, device_id)
 	)`)
-	db.Exec("ALTER TABLE devices ADD COLUMN owner_email TEXT")
 	
 	return err
 }
 
 func loadDevices() {
-	rows, err := db.Query("SELECT id, name, chat_id, bot_token, green_avatar, red_avatar, owner_email FROM devices")
+	rows, err := db.Query("SELECT id, name, chat_id, bot_token, owner_email, wifi_ssid, paused FROM devices")
 	if err != nil {
 		log.Printf("Failed to load devices: %v", err)
-		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var d DeviceConfig
-		var chatID, botToken, greenAvatar, redAvatar, ownerEmail sql.NullString
-		rows.Scan(&d.ID, &d.Name, &chatID, &botToken, &greenAvatar, &redAvatar, &ownerEmail)
+		var chatID, botToken, ownerEmail, wifiSSID sql.NullString
+		var paused sql.NullBool
+		rows.Scan(&d.ID, &d.Name, &chatID, &botToken, &ownerEmail, &wifiSSID, &paused)
 		d.ChatID = chatID.String
 		d.BotToken = botToken.String
-		d.GreenAvatar = greenAvatar.String
-		d.RedAvatar = redAvatar.String
 		d.OwnerEmail = ownerEmail.String
+		d.WifiSSID = wifiSSID.String
+		d.Paused = paused.Bool
 		d.Configured = d.ChatID != "" && d.BotToken != ""
 		devices[d.ID] = &d
-		log.Printf("Loaded device: %s (%s) owner=%s", d.ID, d.Name, d.OwnerEmail)
+		log.Printf("Loaded device: %s (%s) owner=%s paused=%v", d.ID, d.Name, d.OwnerEmail, d.Paused)
 	}
 }
 
 func saveDevice(d *DeviceConfig) error {
 	_, err := db.Exec(`
-		INSERT OR REPLACE INTO devices (id, name, chat_id, bot_token, green_avatar, red_avatar, owner_email)
+		INSERT OR REPLACE INTO devices (id, name, chat_id, bot_token, owner_email, wifi_ssid, paused)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, d.ID, d.Name, d.ChatID, d.BotToken, d.GreenAvatar, d.RedAvatar, d.OwnerEmail)
+	`, d.ID, d.Name, d.ChatID, d.BotToken, d.OwnerEmail, d.WifiSSID, d.Paused)
 	return err
 }
 
 func saveEvent(deviceID, eventType string, ts time.Time, durationSec int64) {
+	// Check if last event is same type - skip duplicate
+	var lastType string
+	db.QueryRow("SELECT event_type FROM events WHERE device_id = ? ORDER BY timestamp DESC LIMIT 1", deviceID).Scan(&lastType)
+	if lastType == eventType {
+		log.Printf("[%s] Skipping duplicate %s event", deviceID, eventType)
+	}
+
 	_, err := db.Exec(
 		"INSERT INTO events (device_id, event_type, timestamp, duration_seconds) VALUES (?, ?, ?, ?)",
 		deviceID, eventType, ts, durationSec,
@@ -242,21 +254,18 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	
 	if !valid {
 		http.Error(w, "Invalid state", 400)
-		return
 	}
 
 	code := r.URL.Query().Get("code")
 	token, err := googleOAuthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		http.Error(w, "Failed to exchange token: "+err.Error(), 500)
-		return
 	}
 
 	client := googleOAuthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
 		http.Error(w, "Failed to get user info", 500)
-		return
 	}
 	defer resp.Body.Close()
 
@@ -464,6 +473,12 @@ var adminHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+func testFlashHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/test-flash.html")
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(content)
+}
+
 func main() {
 	kyivLoc, _ = time.LoadLocation("Europe/Kyiv")
 
@@ -487,9 +502,16 @@ func main() {
 	http.HandleFunc("/api/history", historyHandler)
 	http.HandleFunc("/history", historyPageHandler)
 	http.HandleFunc("/flash", flashPageHandler)
-	http.HandleFunc("/flash-test", flashTestHandler)
+	http.HandleFunc("/test-flash", testFlashHandler)
 	http.HandleFunc("/esptool-bundle.js", esptoolBundleHandler)
-	http.HandleFunc("/api/manifest", manifestHandler)
+	http.HandleFunc("/flash.css", flashCssHandler)
+	http.HandleFunc("/flash.js", flashJsHandler)
+	http.HandleFunc("/manifest.json", staticManifestHandler)
+	http.HandleFunc("/firmware_improv.bin", firmwareBinHandler)
+	http.HandleFunc("/firmware.bin", firmwareBinHandler)
+	http.HandleFunc("/dashboard.css", dashboardCssHandler)
+	http.HandleFunc("/dashboard.js", dashboardJsHandler)
+	http.HandleFunc("/improv.js", improvJsHandler)
 	http.HandleFunc("/api/firmware", firmwareHandler)
 	http.HandleFunc("/api/my-devices", myDevicesHandler)
 	http.HandleFunc("/api/my-devices/", myDeviceHandler)
@@ -499,6 +521,7 @@ func main() {
 	http.HandleFunc("/api/claim", claimDeviceHandler)
 	http.HandleFunc("/api/subscribe", subscribeHandler)
 	http.HandleFunc("/api/unsubscribe/", unsubscribeHandler)
+	http.HandleFunc("/api/stats", apiStatsHandler)
 	http.HandleFunc("/auth/logout", authLogoutHandler)
 	http.HandleFunc("/esptool-js/", esptoolJsHandler)
 	http.HandleFunc("/improv-wifi-sdk/", improvSdkHandler)
@@ -513,7 +536,6 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)
 	if email == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
-		return
 	}
 	http.ServeFile(w, r, "dashboard.html")
 }
@@ -521,7 +543,6 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 func oldDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(dashboardHTML))
@@ -562,6 +583,8 @@ func myDevicesHandler(w http.ResponseWriter, r *http.Request) {
 				"last_ping": lastPing.Format(time.RFC3339),
 				"bot_token": d.BotToken,
 				"chat_id":   d.ChatID,
+				"wifi_ssid": d.WifiSSID,
+				"paused":    d.Paused,
 			})
 		}
 	}
@@ -605,13 +628,11 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)
 	if email == "" {
 		http.Error(w, "unauthorized", 401)
-		return
 	}
 
 	id := r.URL.Path[len("/api/my-devices/"):]
 	if id == "" {
 		http.Error(w, "device id required", 400)
-		return
 	}
 
 	mu.Lock()
@@ -620,7 +641,6 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	d, exists := devices[id]
 	if !exists || d.OwnerEmail != email {
 		http.Error(w, "device not found", 404)
-		return
 	}
 
 	switch r.Method {
@@ -629,6 +649,8 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 			Name     string `json:"name"`
 			BotToken string `json:"bot_token"`
 			ChatID   string `json:"chat_id"`
+			WifiSSID string `json:"wifi_ssid"`
+			Paused   *bool  `json:"paused"`
 		}
 		json.NewDecoder(r.Body).Decode(&data)
 		if data.Name != "" {
@@ -639,6 +661,12 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 			d.ChatID = data.ChatID
 			d.Configured = data.BotToken != "" && data.ChatID != ""
 		}
+		if data.WifiSSID != "" {
+			d.WifiSSID = data.WifiSSID
+		}
+		if data.Paused != nil {
+			d.Paused = *data.Paused
+		}
 		saveDevice(d)
 		w.Write([]byte("ok"))
 
@@ -646,6 +674,8 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		delete(devices, id)
 		delete(states, id)
 		db.Exec("DELETE FROM devices WHERE id = ?", id)
+		db.Exec("DELETE FROM events WHERE device_id = ?", id)
+		db.Exec("DELETE FROM subscriptions WHERE device_id = ?", id)
 		w.Write([]byte("ok"))
 
 	default:
@@ -679,6 +709,27 @@ func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func apiStatsHandler(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	online := 0
+	for _, state := range states {
+		if state != nil && !state.IsDown {
+			online++
+		}
+	}
+	mu.Unlock()
+
+	today := time.Now().Format("2006-01-02")
+	var eventsToday int
+	db.QueryRow("SELECT COUNT(*) FROM events WHERE date(timestamp) = ?", today).Scan(&eventsToday)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"devices_online": online,
+		"events_today":   eventsToday,
+	})
 }
 
 func historyHandler(w http.ResponseWriter, r *http.Request) {
@@ -725,11 +776,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	config, exists := devices[deviceID]
 	if !exists {
-		config = &DeviceConfig{
-			ID: deviceID, Name: deviceID,
-			GreenAvatar: "/opt/power-monitor/green.png",
-			RedAvatar:   "/opt/power-monitor/red.png",
-		}
+		config = &DeviceConfig{ID: deviceID, Name: deviceID}
 		devices[deviceID] = config
 		saveDevice(config)
 		log.Printf("Auto-registered device: %s", deviceID)
@@ -749,14 +796,16 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	if wasDown { state.UpSince = time.Now() }
 	mu.Unlock()
 
-	if wasDown && config.Configured {
+	if wasDown {
 		duration := time.Since(downTime)
-		now := time.Now().In(kyivLoc)
-		msg := fmt.Sprintf("🟢 %s Світло з'явилось\n🕓 Його не було %s", now.Format("15:04"), formatDuration(duration))
-		sendTelegram(config.BotToken, config.ChatID, msg)
-		setChatPhoto(config.BotToken, config.ChatID, config.GreenAvatar)
-		saveEvent(deviceID, "up", time.Now(), int64(duration.Seconds()))
 		log.Printf("[%s] Light ON after %s", deviceID, formatDuration(duration))
+		saveEvent(deviceID, "up", time.Now(), int64(duration.Seconds()))
+		if config.Configured && !config.Paused {
+			now := time.Now().In(kyivLoc)
+			msg := fmt.Sprintf("🟢 %s Світло з'явилось\n🕓 Його не було %s", now.Format("15:04"), formatDuration(duration))
+			msgID := sendTelegram(config.BotToken, config.ChatID, msg)
+			setChatPhoto(config.BotToken, config.ChatID, greenAvatar, msgID)
+		}
 	}
 
 	w.Write([]byte("ok"))
@@ -768,30 +817,44 @@ func monitor() {
 		mu.Lock()
 		for deviceID, state := range states {
 			config := devices[deviceID]
-			if config == nil || !config.Configured { continue }
+			if config == nil { continue }
 			if !state.IsDown && time.Since(state.LastPing) > timeout {
 				state.IsDown = true
 				state.DownSince = state.LastPing
 				upDuration := state.DownSince.Sub(state.UpSince)
-				now := time.Now().In(kyivLoc)
-				msg := fmt.Sprintf("🔴 %s Світло зникло\n🕓 Воно було %s", now.Format("15:04"), formatDuration(upDuration))
-				go sendTelegram(config.BotToken, config.ChatID, msg)
-				go setChatPhoto(config.BotToken, config.ChatID, config.RedAvatar)
-				go saveEvent(deviceID, "down", time.Now(), int64(upDuration.Seconds()))
 				log.Printf("[%s] Light OFF after %s up", deviceID, formatDuration(upDuration))
+				go saveEvent(deviceID, "down", time.Now(), int64(upDuration.Seconds()))
+				if config.Configured && !config.Paused {
+					now := time.Now().In(kyivLoc)
+					msg := fmt.Sprintf("🔴 %s Світло зникло\n🕓 Воно було %s", now.Format("15:04"), formatDuration(upDuration))
+					go func(bt, ci, m, pp string) {
+						msgID := sendTelegram(bt, ci, m)
+						setChatPhoto(bt, ci, pp, msgID)
+					}(config.BotToken, config.ChatID, msg, redAvatar)
+				}
 			}
 		}
 		mu.Unlock()
 	}
 }
 
-func sendTelegram(botToken, chatID, text string) {
-	if botToken == "" || chatID == "" { return }
+func sendTelegram(botToken, chatID, text string) int {
+	if botToken == "" || chatID == "" { return 0 }
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
-	http.PostForm(apiURL, url.Values{"chat_id": {chatID}, "text": {text}})
+	resp, err := http.PostForm(apiURL, url.Values{"chat_id": {chatID}, "text": {text}})
+	if err != nil { return 0 }
+	defer resp.Body.Close()
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			MessageID int `json:"message_id"`
+		} `json:"result"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Result.MessageID
 }
 
-func setChatPhoto(botToken, chatID, photoPath string) {
+func setChatPhoto(botToken, chatID, photoPath string, afterMsgID int) {
 	if botToken == "" || chatID == "" || photoPath == "" { return }
 	file, err := os.Open(photoPath)
 	if err != nil { return }
@@ -806,8 +869,19 @@ func setChatPhoto(botToken, chatID, photoPath string) {
 	req, _ := http.NewRequest("POST", apiURL, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	resp, err := http.DefaultClient.Do(req)
-	if err == nil { defer resp.Body.Close(); ioutil.ReadAll(resp.Body) }
+	if err == nil {
+		defer resp.Body.Close()
+		ioutil.ReadAll(resp.Body)
+		// Delete service message about photo change (it is afterMsgID + 1)
+		if afterMsgID > 0 {
+			time.Sleep(300 * time.Millisecond)
+			deleteURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteMessage?chat_id=%s&message_id=%d",
+				botToken, chatID, afterMsgID+1)
+			http.Get(deleteURL)
+		}
+	}
 }
+
 
 func formatDuration(d time.Duration) string {
 	h := int(d.Hours())
@@ -820,7 +894,6 @@ func flashPageHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)
 	if email == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
-		return
 	}
 	content, _ := os.ReadFile("/opt/power-monitor/flash.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -830,6 +903,12 @@ func flashPageHandler(w http.ResponseWriter, r *http.Request) {
 func flashTestHandler(w http.ResponseWriter, r *http.Request) {
 	content, _ := os.ReadFile("/opt/power-monitor/flash-test.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(content)
+}
+
+func staticManifestHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/manifest.json")
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(content)
 }
 
@@ -866,10 +945,8 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 			d := &DeviceConfig{
 				ID: device, Name: name,
 				BotToken: botToken, ChatID: chatID,
-				GreenAvatar: "/opt/power-monitor/green.png",
-				RedAvatar:   "/opt/power-monitor/red.png",
-				Configured:  botToken != "" && chatID != "",
-				OwnerEmail:  ownerEmail,
+				Configured: botToken != "" && chatID != "",
+				OwnerEmail: ownerEmail,
 			}
 			devices[device] = d
 			states[device] = &DeviceState{LastPing: time.Time{}, UpSince: time.Now()}
@@ -929,7 +1006,6 @@ func firmwareHandler(w http.ResponseWriter, r *http.Request) {
 	firmware, err := os.ReadFile(firmwarePath)
 	if err != nil {
 		http.Error(w, "Firmware not found", 500)
-		return
 	}
 
 	for placeholder, value := range placeholders {
@@ -957,7 +1033,6 @@ func apiMeHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)
 	if email == "" {
 		http.Error(w, "Not authenticated", http.StatusUnauthorized)
-		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"email": email})
@@ -966,7 +1041,6 @@ func apiMeHandler(w http.ResponseWriter, r *http.Request) {
 func landingHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-		return
 	}
 	http.ServeFile(w, r, "landing.html")
 }
@@ -974,7 +1048,6 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 func subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", 405)
-		return
 	}
 	
 	email := getSessionEmail(r)
@@ -988,7 +1061,6 @@ func subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", 400)
-		return
 	}
 	
 	// Check if device exists
@@ -998,13 +1070,11 @@ func subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	
 	if !exists {
 		http.Error(w, "Пристрій не знайдено", 404)
-		return
 	}
 	
 	_, err := db.Exec("INSERT OR IGNORE INTO subscriptions (email, device_id) VALUES (?, ?)", email, req.DeviceID)
 	if err != nil {
 		http.Error(w, "Database error", 500)
-		return
 	}
 	
 	w.WriteHeader(200)
@@ -1013,7 +1083,6 @@ func subscribeHandler(w http.ResponseWriter, r *http.Request) {
 func unsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
 		http.Error(w, "Method not allowed", 405)
-		return
 	}
 	
 	email := getSessionEmail(r)
@@ -1025,7 +1094,6 @@ func unsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	deviceID := r.URL.Path[len("/api/unsubscribe/"):]
 	if deviceID == "" {
 		http.Error(w, "Device ID required", 400)
-		return
 	}
 	
 	db.Exec("DELETE FROM subscriptions WHERE email = ? AND device_id = ?", email, deviceID)
@@ -1038,12 +1106,10 @@ func esptoolJsHandler(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Path[len("/esptool-js/"):]
 	if filename == "" {
 		http.NotFound(w, r)
-		return
 	}
 	// Security: prevent path traversal
 	if filepath.Base(filename) != filename {
 		http.NotFound(w, r)
-		return
 	}
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -1055,13 +1121,11 @@ func improvSdkHandler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[len("/improv-wifi-sdk/"):]
 	if path == "" {
 		http.NotFound(w, r)
-		return
 	}
 	// Security: prevent path traversal (allow subdirs like web/)
 	cleanPath := filepath.Clean(path)
 	if cleanPath != path || cleanPath[0] == '/' || cleanPath == ".." || len(cleanPath) > 2 && cleanPath[:3] == "../" {
 		http.NotFound(w, r)
-		return
 	}
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -1097,19 +1161,61 @@ func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Device %s created during claim", deviceID)
 	}
 
-	// Only claim if no owner yet
+	// If device has different owner, add them as subscriber before transferring
 	if d.OwnerEmail != "" && d.OwnerEmail != email {
-		http.Error(w, "device already claimed", 403)
-		return
+		db.Exec("INSERT OR IGNORE INTO subscriptions (email, device_id) VALUES (?, ?)", d.OwnerEmail, deviceID)
+		log.Printf("Device %s: old owner %s added to subscribers", deviceID, d.OwnerEmail)
 	}
 
 	d.OwnerEmail = email
 	if deviceName != "" {
 		d.Name = deviceName
 	}
+	// Clear WiFi on re-flash (NVS is erased on ESP32)
+	d.WifiSSID = ""
 	saveDevice(d)
 	log.Printf("Device %s claimed by %s", deviceID, email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "device": deviceID})
+}
+
+func flashCssHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/flash.css")
+	w.Header().Set("Content-Type", "text/css")
+	w.Write(content)
+}
+
+func flashJsHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/flash.js")
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Write(content)
+}
+
+func dashboardCssHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/dashboard.css")
+	w.Header().Set("Content-Type", "text/css")
+	w.Write(content)
+}
+
+func dashboardJsHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/dashboard.js")
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Write(content)
+}
+
+func improvJsHandler(w http.ResponseWriter, r *http.Request) {
+	content, _ := os.ReadFile("/opt/power-monitor/improv.js")
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Write(content)
+}
+
+func firmwareBinHandler(w http.ResponseWriter, r *http.Request) {
+	content, err := os.ReadFile("/opt/power-monitor/firmware_improv.bin")
+	if err != nil {
+		http.Error(w, "Firmware not found", 404)
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename=firmware_improv.bin")
+	w.Write(content)
 }
