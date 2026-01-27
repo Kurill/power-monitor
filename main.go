@@ -195,6 +195,7 @@ func loadLastState(deviceID string) (*DeviceState, error) {
 		state.IsDown = true
 		state.DownSince = ts
 	} else {
+		state.IsDown = false
 		state.UpSince = ts
 	}
 	return state, nil
