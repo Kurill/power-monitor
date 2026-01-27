@@ -123,6 +123,10 @@
                                 <span class="pause-toggle-text">${d.paused ? 'Вимк' : 'Увімк'}</span>
                             </button>
                         </div>
+                        <div class="timeout-row">
+                            <span class="timeout-label">Таймаут <span class="timeout-value" id="timeoutVal_${d.id}">${d.timeout || 90}с</span></span>
+                            <input type="range" class="timeout-slider" id="timeout_${d.id}" min="30" max="300" step="10" value="${d.timeout || 90}" oninput="updateTimeoutLabel('${d.id}', this.value)" onchange="saveTimeout('${d.id}', this.value)">
+                        </div>
                     </div>
                 `;
             }
@@ -216,6 +220,21 @@
                 if (res.ok) loadDevices();
                 else alert("Помилка");
             } catch (e) { alert("Помилка"); }
+        }
+
+        function updateTimeoutLabel(id, val) {
+            document.getElementById('timeoutVal_' + id).textContent = val + 'с';
+        }
+
+        async function saveTimeout(id, val) {
+            try {
+                const res = await fetch('/api/my-devices/' + id, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({timeout: parseInt(val)})
+                });
+                if (!res.ok) alert('Помилка');
+            } catch (e) { alert('Помилка'); }
         }
 
         function openSubscribeModal() {

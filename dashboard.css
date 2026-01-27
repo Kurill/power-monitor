@@ -966,6 +966,59 @@
             margin-right: 0;
         }
 
+        /* Timeout Slider */
+        .timeout-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            gap: 16px;
+        }
+
+        .timeout-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .timeout-value {
+            color: var(--electric);
+            font-weight: 600;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .timeout-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .timeout-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--electric);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--electric-glow);
+        }
+
+        .timeout-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--electric);
+            cursor: pointer;
+            border: none;
+        }
+
         /* Pause Toggle */
         .pause-row {
             display: flex;

@@ -52,6 +52,7 @@ type DeviceConfig struct {
 	OwnerEmail string
 	WifiSSID   string
 	Paused     bool
+	Timeout    int // seconds, 0 = default (90)
 }
 
 type DeviceState struct {
@@ -107,6 +108,7 @@ func initDB() error {
 	db.Exec("ALTER TABLE devices ADD COLUMN owner_email TEXT")
 	db.Exec("ALTER TABLE devices ADD COLUMN wifi_ssid TEXT")
 	db.Exec("ALTER TABLE devices ADD COLUMN paused INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE devices ADD COLUMN timeout INTEGER DEFAULT 0")
 
 	// Create subscriptions table
 	db.Exec(`CREATE TABLE IF NOT EXISTS subscriptions (
@@ -120,7 +122,7 @@ func initDB() error {
 }
 
 func loadDevices() {
-	rows, err := db.Query("SELECT id, name, chat_id, bot_token, owner_email, wifi_ssid, paused FROM devices")
+	rows, err := db.Query("SELECT id, name, chat_id, bot_token, owner_email, wifi_ssid, paused, COALESCE(timeout, 0) FROM devices")
 	if err != nil {
 		log.Printf("Failed to load devices: %v", err)
 	}
@@ -130,12 +132,14 @@ func loadDevices() {
 		var d DeviceConfig
 		var chatID, botToken, ownerEmail, wifiSSID sql.NullString
 		var paused sql.NullBool
-		rows.Scan(&d.ID, &d.Name, &chatID, &botToken, &ownerEmail, &wifiSSID, &paused)
+		var timeoutVal int
+		rows.Scan(&d.ID, &d.Name, &chatID, &botToken, &ownerEmail, &wifiSSID, &paused, &timeoutVal)
 		d.ChatID = chatID.String
 		d.BotToken = botToken.String
 		d.OwnerEmail = ownerEmail.String
 		d.WifiSSID = wifiSSID.String
 		d.Paused = paused.Bool
+		d.Timeout = timeoutVal
 		d.Configured = d.ChatID != "" && d.BotToken != ""
 		devices[d.ID] = &d
 		log.Printf("Loaded device: %s (%s) owner=%s paused=%v", d.ID, d.Name, d.OwnerEmail, d.Paused)
@@ -144,9 +148,9 @@ func loadDevices() {
 
 func saveDevice(d *DeviceConfig) error {
 	_, err := db.Exec(`
-		INSERT OR REPLACE INTO devices (id, name, chat_id, bot_token, owner_email, wifi_ssid, paused)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, d.ID, d.Name, d.ChatID, d.BotToken, d.OwnerEmail, d.WifiSSID, d.Paused)
+		INSERT OR REPLACE INTO devices (id, name, chat_id, bot_token, owner_email, wifi_ssid, paused, timeout)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, d.ID, d.Name, d.ChatID, d.BotToken, d.OwnerEmail, d.WifiSSID, d.Paused, d.Timeout)
 	return err
 }
 
@@ -572,7 +576,7 @@ func myDevicesHandler(w http.ResponseWriter, r *http.Request) {
 			lastPing := time.Time{}
 			if state, ok := states[id]; ok {
 				lastPing = state.LastPing
-				if time.Since(state.LastPing) < timeout {
+				if time.Since(state.LastPing) < getDeviceTimeout(d) {
 					status = "online"
 				}
 			}
@@ -585,6 +589,7 @@ func myDevicesHandler(w http.ResponseWriter, r *http.Request) {
 				"chat_id":   d.ChatID,
 				"wifi_ssid": d.WifiSSID,
 				"paused":    d.Paused,
+				"timeout":   d.Timeout,
 			})
 		}
 	}
@@ -603,7 +608,7 @@ func myDevicesHandler(w http.ResponseWriter, r *http.Request) {
 				lastPing := time.Time{}
 				if state, ok := states[deviceID]; ok {
 					lastPing = state.LastPing
-					if time.Since(state.LastPing) < timeout {
+					if time.Since(state.LastPing) < getDeviceTimeout(d) {
 						status = "online"
 					}
 				}
@@ -651,6 +656,7 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 			ChatID   string `json:"chat_id"`
 			WifiSSID string `json:"wifi_ssid"`
 			Paused   *bool  `json:"paused"`
+			Timeout  *int   `json:"timeout"`
 		}
 		json.NewDecoder(r.Body).Decode(&data)
 		if data.Name != "" {
@@ -666,6 +672,12 @@ func myDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if data.Paused != nil {
 			d.Paused = *data.Paused
+		}
+		if data.Timeout != nil {
+			t := *data.Timeout
+			if t < 30 { t = 30 }
+			if t > 300 { t = 300 }
+			d.Timeout = t
 		}
 		saveDevice(d)
 		w.Write([]byte("ok"))
@@ -811,6 +823,13 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func getDeviceTimeout(d *DeviceConfig) time.Duration {
+	if d.Timeout > 0 {
+		return time.Duration(d.Timeout) * time.Second
+	}
+	return timeout
+}
+
 func monitor() {
 	for {
 		time.Sleep(10 * time.Second)
@@ -818,7 +837,7 @@ func monitor() {
 		for deviceID, state := range states {
 			config := devices[deviceID]
 			if config == nil { continue }
-			if !state.IsDown && time.Since(state.LastPing) > timeout {
+			if !state.IsDown && time.Since(state.LastPing) > getDeviceTimeout(config) {
 				state.IsDown = true
 				state.DownSince = state.LastPing
 				upDuration := state.DownSince.Sub(state.UpSince)
