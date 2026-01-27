@@ -160,6 +160,7 @@ func saveEvent(deviceID, eventType string, ts time.Time, durationSec int64) {
 	db.QueryRow("SELECT event_type FROM events WHERE device_id = ? ORDER BY timestamp DESC LIMIT 1", deviceID).Scan(&lastType)
 	if lastType == eventType {
 		log.Printf("[%s] Skipping duplicate %s event", deviceID, eventType)
+		return
 	}
 
 	_, err := db.Exec(
@@ -172,10 +173,8 @@ func saveEvent(deviceID, eventType string, ts time.Time, durationSec int64) {
 }
 
 func loadLastState(deviceID string) (*DeviceState, error) {
-	state := &DeviceState{IsDown: true, DownSince: time.Now(),
-		LastPing: time.Time{},
-		
-	}
+	now := time.Now()
+	state := &DeviceState{IsDown: true, DownSince: now, LastPing: now}
 
 	var eventType string
 	var ts time.Time
@@ -706,7 +705,7 @@ func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	for id, d := range devices {
 		state := states[id]
 		if state == nil {
-			state = &DeviceState{IsDown: true, LastPing: time.Time{}, DownSince: time.Now()}
+			state = &DeviceState{IsDown: true, LastPing: time.Now(), DownSince: time.Now()}
 		}
 		status := "up"
 		since := state.UpSince
@@ -799,11 +798,10 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 
 	state, exists := states[deviceID]
 	if !exists {
-		state = &DeviceState{UpSince: time.Now()}
+		state = &DeviceState{UpSince: time.Now(), LastPing: time.Now()}
 		states[deviceID] = state
 	}
 
-	// state.LastPing loaded from DB
 	wasDown := state.IsDown
 	downTime := state.DownSince
 	state.LastPing = time.Now()
@@ -906,6 +904,8 @@ func setChatPhoto(botToken, chatID, photoPath string, afterMsgID int) {
 
 
 func formatDuration(d time.Duration) string {
+	if d < 0 { d = 0 }
+	if d > 365*24*time.Hour { d = 0 } // overflow protection
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60
 	if h > 0 { return fmt.Sprintf("%dгод %dхв", h, m) }
@@ -916,6 +916,7 @@ func flashPageHandler(w http.ResponseWriter, r *http.Request) {
 	email := getSessionEmail(r)
 	if email == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
+		return
 	}
 	content, _ := os.ReadFile("/opt/power-monitor/flash.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -971,7 +972,7 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 				OwnerEmail: ownerEmail,
 			}
 			devices[device] = d
-			states[device] = &DeviceState{LastPing: time.Time{}, UpSince: time.Now()}
+			states[device] = &DeviceState{LastPing: time.Now(), UpSince: time.Now()}
 			saveDevice(d)
 			log.Printf("Pre-registered device: %s (%s) owner=%s", device, name, ownerEmail)
 		}
@@ -1179,7 +1180,7 @@ func claimDeviceHandler(w http.ResponseWriter, r *http.Request) {
 			Name: deviceName,
 		}
 		devices[deviceID] = d
-		states[deviceID] = &DeviceState{}
+		states[deviceID] = &DeviceState{LastPing: time.Now(), DownSince: time.Now(), IsDown: true}
 		log.Printf("Device %s created during claim", deviceID)
 	}
 
